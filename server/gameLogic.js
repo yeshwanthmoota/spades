@@ -199,14 +199,22 @@ function getGullyTotalRounds(numPlayers) {
   return 2 * Math.floor(52 / numPlayers) - 1;
 }
 
-// Bot bid for Gully: picks closest valid estimate that doesn't make running sum divisible by numPlayers
+// Bot bid for Gully: hook rule — only the last bidder is restricted.
+// The last bidder cannot bid the value that makes the total equal cardsDealt.
+// All other bidders are completely free.
 function botGullyBid(hand, submittedBids, numPlayers) {
-  const previousSum = submittedBids.reduce((a, b) => a + b, 0);
-  const handSize = hand.length;
+  const handSize = hand.length; // equals cardsDealt for this player
   const estimate = Math.min(Math.round(botBid(hand)), handSize);
-  const valid = Array.from({length: handSize + 1}, (_, i) => i)
-    .filter(b => (previousSum + b) % numPlayers !== 0);
-  if (valid.length === 0) return estimate;
+  const isLastBidder = submittedBids.length === numPlayers - 1;
+
+  let valid = Array.from({ length: handSize + 1 }, (_, i) => i);
+  if (isLastBidder) {
+    const previousSum = submittedBids.reduce((a, b) => a + b, 0);
+    const forbiddenBid = handSize - previousSum;
+    valid = valid.filter(b => b !== forbiddenBid);
+  }
+
+  if (valid.length === 0) return 0; // shouldn't happen — always at least one valid option
   return valid.reduce((best, b) => Math.abs(b - estimate) < Math.abs(best - estimate) ? b : best);
 }
 

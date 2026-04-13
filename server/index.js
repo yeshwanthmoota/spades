@@ -359,10 +359,14 @@ io.on('connection', (socket) => {
 
     if (room.gameMode === 'gully') {
       const submittedBids = room.players.filter(p => p.bid !== null).map(p => p.bid);
-      const runningSum = submittedBids.reduce((a, b) => a + b, 0) + bidNum;
-      if (runningSum % room.players.length === 0) {
-        socket.emit('error', { message: `Bid ${bidNum} makes the total divisible by ${room.players.length} — choose another` });
-        return;
+      const isLastBidder = submittedBids.length === room.players.length - 1;
+      if (isLastBidder) {
+        const previousSum = submittedBids.reduce((a, b) => a + b, 0);
+        const cardsDealt = room.players.find(p => p.socketId === socket.id)?.hand?.length ?? 0;
+        if (previousSum + bidNum === cardsDealt) {
+          socket.emit('error', { message: `Bid ${bidNum} not allowed — total would equal the ${cardsDealt} tricks available this round` });
+          return;
+        }
       }
     }
 

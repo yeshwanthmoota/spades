@@ -70,13 +70,25 @@ export function getGullyTotalRounds(numPlayers) {
   return 2 * Math.floor(52 / numPlayers) - 1;
 }
 
+/**
+ * Returns the single forbidden bid for the last bidder in a Gully round.
+ * The hook rule: the last player cannot bid the value that would make the
+ * total sum equal to cardsDealt (the number of tricks available).
+ * All other players have no restrictions — returns [] for them.
+ *
+ * @param {number[]} submittedBids  Bids already placed this round
+ * @param {number}   numPlayers     Total players in the game
+ * @param {number}   handSize       Cards in the current player's hand (= cardsDealt)
+ * @returns {number[]}  Array with one forbidden bid, or empty if not the last bidder
+ */
 export function getInvalidGullyBids(submittedBids, numPlayers, handSize) {
+  // Only the last bidder is restricted
+  if (submittedBids.length !== numPlayers - 1) return [];
   const previousSum = submittedBids.reduce((a, b) => a + b, 0);
-  const invalid = [];
-  for (let b = 0; b <= handSize; b++) {
-    if ((previousSum + b) % numPlayers === 0) invalid.push(b);
-  }
-  return invalid;
+  const forbiddenBid = handSize - previousSum;
+  // Only actually forbidden if it falls in the valid bid range
+  if (forbiddenBid >= 0 && forbiddenBid <= handSize) return [forbiddenBid];
+  return [];
 }
 
 export function calculateGullyScore(bid, tricksWon) {

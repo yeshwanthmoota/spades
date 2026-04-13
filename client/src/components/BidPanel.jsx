@@ -11,10 +11,13 @@ export default function BidPanel({ gameState, mySocketId, roomCode, onSubmitBid 
 
   if (!gameState || gameState.status !== 'bidding') return null;
 
-  // For Gully: compute which bids are invalid based on already-submitted bids
+  // For Gully: the hook rule applies only to the last bidder.
+  // All others bid freely; the last bidder may not bid the one value that
+  // would make the total sum equal the number of cards dealt this round.
   const submittedBids = isGully
     ? gameState.players.filter(p => p.bid !== null && p.bid !== undefined).map(p => p.bid)
     : [];
+  const isLastGullyBidder = isGully && submittedBids.length === gameState.players.length - 1;
   const invalidBids = isGully ? getInvalidGullyBids(submittedBids, gameState.players.length, handSize) : [];
 
   const bidOptions = [0, ...Array.from({ length: handSize }, (_, i) => i + 1)];
@@ -54,9 +57,9 @@ export default function BidPanel({ gameState, mySocketId, roomCode, onSubmitBid 
 
         {isMyTurn && !alreadyBid ? (
           <>
-            {isGully && (
+            {isLastGullyBidder && invalidBids.length > 0 && (
               <p className="text-xs text-orange-300 mb-2 text-center">
-                Sum of bids must not be divisible by {gameState.players.length}
+                You're last to bid — cannot bid <span className="font-bold text-orange-200">{invalidBids[0]}</span> (would make total equal tricks available)
               </p>
             )}
             <div className="grid grid-cols-5 gap-2">
@@ -65,7 +68,7 @@ export default function BidPanel({ gameState, mySocketId, roomCode, onSubmitBid 
                 return (
                   <button key={n} onClick={() => !isInvalid && onSubmitBid(roomCode, n)}
                     disabled={isInvalid}
-                    title={isInvalid ? `Bid ${n} not allowed — would make sum divisible by ${gameState.players.length}` : undefined}
+                    title={isInvalid ? `Bid ${n} not allowed — total would equal the ${handSize} tricks available` : undefined}
                     className={`py-3 rounded-xl font-bold text-lg border active:scale-95 transition-all duration-100
                       ${isInvalid
                         ? 'bg-gray-800/40 border-gray-700 text-gray-600 cursor-not-allowed opacity-40'
