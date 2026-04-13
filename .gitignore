@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Lock files (generated per-environment)
+client/package-lock.json
+server/package-lock.json
+package-lock.json
+
+# React build output (generated on server by npm run build)
+client/dist/
+server/public/
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
