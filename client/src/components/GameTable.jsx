@@ -194,12 +194,16 @@ export default function GameTable({
       {/* Rules modal */}
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
 
-      {/* Top bar: Rules (left) + Scores (right) */}
+      {/* Top bar: Rules (left) + Room code (centre) */}
       <div className="relative h-0">
         <button onClick={() => setShowRules(true)}
           className="fixed top-3 left-3 z-40 bg-felt-dark border border-gray-600 rounded-lg px-3 py-1.5 text-sm font-semibold hover:bg-felt transition">
           ♠ Rules
         </button>
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-40 bg-felt-dark border border-gray-600 rounded-lg px-3 py-1.5 flex items-center gap-2">
+          <span className="text-gray-500 text-xs">ROOM</span>
+          <span className="font-mono font-bold text-yellow-300 tracking-widest text-sm">{roomCode}</span>
+        </div>
       </div>
       <ScoreBoard gameState={gameState} mySocketId={mySocketId} />
 

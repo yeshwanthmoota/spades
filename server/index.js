@@ -411,6 +411,15 @@ io.on('connection', (socket) => {
         player.disconnected = true;
         console.log(`[disconnect] ${player.name} disconnected mid-game — bot taking over`);
         clearSocketMapping(socket.id); // remove stale mapping, keep player in room
+
+        // If ALL players are now disconnected, delete the room entirely
+        if (room.players.every(p => p.disconnected)) {
+          Object.values(room.botTimers).forEach(t => clearTimeout(t));
+          delete require('./roomManager').rooms[room.code];
+          console.log(`[disconnect] All players gone — room ${room.code} deleted`);
+          return;
+        }
+
         broadcast(room); // triggers scheduleBot if it's their turn
       }
     } else {
