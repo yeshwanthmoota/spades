@@ -11,7 +11,7 @@ set -e
 # ─────────────────────────────────────────────────────────────────────────────
 
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-WEB_ROOT="/var/www/spades"
+BUILD_DIR="$APP_DIR/server/public"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
@@ -71,13 +71,9 @@ step 6 "Building React client"
 cd "$APP_DIR/client" && npm run build
 ok "React build complete → server/public/"
 
-# ── 7. Deploy build + configure Nginx ────────────────────────────────────────
-step 7 "Deploying build and configuring Nginx"
-sudo mkdir -p "$WEB_ROOT"
-sudo cp -r "$APP_DIR/server/public/." "$WEB_ROOT/"
-sudo chown -R www-data:www-data "$WEB_ROOT"
-ok "Build copied to $WEB_ROOT"
-
+# ── 7. Configure Nginx ───────────────────────────────────────────────────────
+step 7 "Configuring Nginx"
+# Nginx serves directly from server/public — no copy needed
 sudo cp "$APP_DIR/deploy/nginx.conf" /etc/nginx/sites-available/spades
 sudo ln -sf /etc/nginx/sites-available/spades /etc/nginx/sites-enabled/spades
 sudo rm -f /etc/nginx/sites-enabled/default
