@@ -30,12 +30,12 @@ function arrangeSeats(players, mySocketId) {
   return rotated.map((player, i) => ({ player, position: posMap[i] }));
 }
 
-// Top bar is fixed h-12 (48px). Top players sit below it with top-14 (56px).
+// Top bar is fixed h-12 (48px). Top players sit below it with top-20 (80px) for clearance.
 // Left/right players are vertically centred; bottom players are at the bottom edge.
 const POSITION_CLASSES = {
-  top:            'absolute top-14 left-1/2 -translate-x-1/2',
-  'top-left':     'absolute top-14 left-[18%]',
-  'top-right':    'absolute top-14 right-[18%]',
+  top:            'absolute top-20 left-1/2 -translate-x-1/2',
+  'top-left':     'absolute top-20 left-[18%]',
+  'top-right':    'absolute top-20 right-[18%]',
   left:           'absolute left-2 top-1/2 -translate-y-1/2',
   right:          'absolute right-2 top-1/2 -translate-y-1/2',
   'bottom-left':  'absolute bottom-2 left-[18%]',
