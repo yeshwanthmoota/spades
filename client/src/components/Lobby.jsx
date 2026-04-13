@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 const INPUT = "w-full bg-felt-dark rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-400";
 
@@ -11,14 +11,7 @@ export default function Lobby({
   const [password, setPassword] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [view, setView]         = useState('home'); // 'home'|'create'|'join'|'waiting'
-  const [lastAction, setLastAction] = useState('create'); // track which form to return to on error
-
-  // If the server returns an error while we're in the waiting state, go back to the form
-  useEffect(() => {
-    if (errorMsg && view === 'waiting') {
-      setView(lastAction);
-    }
-  }, [errorMsg]);
+  const [lastAction, setLastAction] = useState('create');
 
   const inRoom      = !!roomCode && !!gameState;
   const me          = gameState?.players?.find(p => p.socketId === mySocketId);
@@ -29,6 +22,7 @@ export default function Lobby({
   function handleCreate(e) {
     e.preventDefault();
     if (!name.trim() || !password.trim()) return;
+    onClearError();
     setLastAction('create');
     onCreateRoom(name.trim(), password.trim());
     setView('waiting');
@@ -37,6 +31,7 @@ export default function Lobby({
   function handleJoin(e) {
     e.preventDefault();
     if (!name.trim() || !joinCode.trim() || !password.trim()) return;
+    onClearError();
     setLastAction('join');
     onJoinRoom(joinCode.trim().toUpperCase(), name.trim(), password.trim());
     setView('waiting');
@@ -183,7 +178,18 @@ export default function Lobby({
       )}
 
       {view === 'waiting' && !inRoom && (
-        <div className="text-gray-400 animate-pulse">Connecting…</div>
+        errorMsg ? (
+          <div className="bg-felt rounded-2xl p-6 w-full max-w-sm shadow-xl border border-white/5 text-center space-y-4">
+            <p className="text-red-400 font-semibold">{errorMsg}</p>
+            <button
+              onClick={() => { setView(lastAction); onClearError(); }}
+              className="w-full py-2 rounded-lg bg-yellow-400 text-black font-bold hover:bg-yellow-300 transition">
+              Try Again
+            </button>
+          </div>
+        ) : (
+          <div className="text-gray-400 animate-pulse">Connecting…</div>
+        )
       )}
     </div>
   );
