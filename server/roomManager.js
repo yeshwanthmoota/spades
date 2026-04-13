@@ -40,6 +40,7 @@ function createRoom(socketId, name) {
     handHistory: [],
     trickHistory: [],
     roundNumber: 0,
+    rematchVotes: [],   // socketIds of players who voted to play again
   };
 
   socketRoomMap[socketId] = code;
@@ -49,8 +50,12 @@ function createRoom(socketId, name) {
 function joinRoom(code, socketId, name) {
   const room = rooms[code];
   if (!room) return { success: false, error: 'Room not found' };
-  if (room.status !== 'lobby') return { success: false, error: 'Game already in progress' };
-  if (room.players.length >= 6) return { success: false, error: 'Room is full (max 6 players)' };
+
+  // Allow joining lobby rooms AND finished rooms (rematch waiting)
+  if (room.status !== 'lobby' && room.status !== 'finished') {
+    return { success: false, error: 'Game already in progress' };
+  }
+  if (room.players.length >= 8) return { success: false, error: 'Room is full (max 8 players)' };
   if (room.players.some(p => p.socketId === socketId)) {
     return { success: false, error: 'Already in room' };
   }
@@ -66,6 +71,11 @@ function joinRoom(code, socketId, name) {
     isHost: false,
   });
 
+  // New joiners during rematch phase are auto-counted as wanting to play
+  if (room.status === 'finished' && !room.rematchVotes.includes(socketId)) {
+    room.rematchVotes.push(socketId);
+  }
+
   socketRoomMap[socketId] = code;
   return { success: true, room };
 }
@@ -78,6 +88,7 @@ function removePlayer(socketId) {
   if (!room) { delete socketRoomMap[socketId]; return null; }
 
   room.players = room.players.filter(p => p.socketId !== socketId);
+  room.rematchVotes = room.rematchVotes.filter(id => id !== socketId);
   delete socketRoomMap[socketId];
 
   // If room is empty, delete it

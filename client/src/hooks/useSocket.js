@@ -20,73 +20,28 @@ export function useSocket() {
       setMySocketId(socket.id);
       console.log('Connected:', socket.id);
     });
+    socket.on('disconnect', () => { setConnected(false); console.log('Disconnected'); });
+    socket.on('room_created', ({ code }) => { setRoomCode(code); setErrorMsg(null); });
+    socket.on('room_joined',  ({ code }) => { setRoomCode(code); setErrorMsg(null); });
+    socket.on('room_update',  (state)   => setGameState(state));
+    socket.on('game_update',  (state)   => setGameState(state));
+    socket.on('error', ({ message }) => { setErrorMsg(message); console.error('Server error:', message); });
 
-    socket.on('disconnect', () => {
-      setConnected(false);
-      console.log('Disconnected');
-    });
-
-    socket.on('room_created', ({ code }) => {
-      setRoomCode(code);
-      setErrorMsg(null);
-    });
-
-    socket.on('room_joined', ({ code }) => {
-      setRoomCode(code);
-      setErrorMsg(null);
-    });
-
-    socket.on('room_update', (state) => {
-      setGameState(state);
-    });
-
-    socket.on('game_update', (state) => {
-      setGameState(state);
-    });
-
-    socket.on('error', ({ message }) => {
-      setErrorMsg(message);
-      console.error('Server error:', message);
-    });
-
-    return () => {
-      socket.disconnect();
-    };
+    return () => socket.disconnect();
   }, []);
 
-  const createRoom = useCallback((name) => {
-    socketRef.current?.emit('create_room', { name });
-  }, []);
-
-  const joinRoom = useCallback((code, name) => {
-    socketRef.current?.emit('join_room', { code, name });
-  }, []);
-
-  const startGame = useCallback((code) => {
-    socketRef.current?.emit('start_game', { code });
-  }, []);
-
-  const submitBid = useCallback((code, bid) => {
-    socketRef.current?.emit('submit_bid', { code, bid });
-  }, []);
-
-  const playCard = useCallback((code, card) => {
-    socketRef.current?.emit('play_card', { code, card });
-  }, []);
-
-  const clearError = useCallback(() => setErrorMsg(null), []);
+  const createRoom  = useCallback((name)        => socketRef.current?.emit('create_room',   { name }), []);
+  const joinRoom    = useCallback((code, name)   => socketRef.current?.emit('join_room',     { code, name }), []);
+  const startGame   = useCallback((code)         => socketRef.current?.emit('start_game',    { code }), []);
+  const submitBid   = useCallback((code, bid)    => socketRef.current?.emit('submit_bid',    { code, bid }), []);
+  const playCard    = useCallback((code, card)   => socketRef.current?.emit('play_card',     { code, card }), []);
+  const voteRematch = useCallback((code, vote)   => socketRef.current?.emit('vote_rematch',  { code, vote }), []);
+  const startRematch= useCallback((code)         => socketRef.current?.emit('start_rematch', { code }), []);
+  const clearError  = useCallback(()             => setErrorMsg(null), []);
 
   return {
-    connected,
-    roomCode,
-    gameState,
-    errorMsg,
-    mySocketId,
-    createRoom,
-    joinRoom,
-    startGame,
-    submitBid,
-    playCard,
-    clearError,
+    connected, roomCode, gameState, errorMsg, mySocketId,
+    createRoom, joinRoom, startGame, submitBid, playCard,
+    voteRematch, startRematch, clearError,
   };
 }

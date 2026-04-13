@@ -23,12 +23,13 @@ function createDeck() {
 
 function dealCards(numPlayers) {
   const deck = createDeck();
-  const cardsPerPlayer = Math.floor(deck.length / numPlayers);
+  // 2-3 players: 7 cards each (short-hand rule)
+  // 4+ players:  deal evenly, remainder stays undealt
+  const cardsPerPlayer = numPlayers <= 3 ? 7 : Math.floor(deck.length / numPlayers);
   const hands = [];
   for (let i = 0; i < numPlayers; i++) {
     hands.push(deck.slice(i * cardsPerPlayer, (i + 1) * cardsPerPlayer));
   }
-  // remainder is left undealt (just dropped)
   return hands;
 }
 

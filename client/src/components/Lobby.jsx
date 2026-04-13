@@ -36,7 +36,7 @@ export default function Lobby({ roomCode, gameState, mySocketId, onCreateRoom, o
           </div>
 
           <p className="text-gray-300 text-sm mb-4">
-            Share this code with friends. Need 2–6 players.
+            Share this code with friends. Need 2–8 players.
           </p>
 
           <div className="space-y-2 mb-6">
@@ -79,7 +79,7 @@ export default function Lobby({ roomCode, gameState, mySocketId, onCreateRoom, o
       <div className="text-center">
         <h1 className="text-6xl font-bold mb-2">♠</h1>
         <h2 className="text-4xl font-bold tracking-widest">SPADES</h2>
-        <p className="text-gray-400 mt-1">2–6 players · Classic rules</p>
+        <p className="text-gray-400 mt-1">2–8 players · Classic rules</p>
       </div>
 
       {view === 'home' && (
