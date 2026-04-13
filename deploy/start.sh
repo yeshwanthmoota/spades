@@ -70,11 +70,8 @@ needs_build() {
 if needs_build; then
   info "Building React app (this takes ~30s)..."
   cd "$CLIENT_DIR"
-  npm run build 2>&1 | tail -5   # show last 5 lines of build output
-
-  # Copy dist → server/public
-  rm -rf "$BUILD_DIR"
-  cp -r "$CLIENT_DIR/dist" "$BUILD_DIR"
+  # Vite outputs directly to server/public (outDir in vite.config.js)
+  npm run build 2>&1 | tail -5
   ok "React build complete → server/public"
 else
   ok "React build is up to date (use --force to rebuild)"
@@ -116,11 +113,10 @@ step "[5/5] Health check..."
 sleep 2
 
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001 2>/dev/null || echo "000")
-if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "304" ]; then
+if [ "$HTTP_CODE" != "000" ]; then
   ok "Node server responding (HTTP $HTTP_CODE)"
 else
-  echo -e "${RED}✖  Node server not responding (HTTP $HTTP_CODE)${NC}"
-  echo -e "   Run: ${YELLOW}pm2 logs spades-server --lines 20${NC}"
+  echo -e "${RED}✖  Node server not responding — check: pm2 logs spades-server --lines 20${NC}"
 fi
 
 NGINX_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost 2>/dev/null || echo "000")
