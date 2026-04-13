@@ -1,6 +1,6 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────
-#  start.sh — Build (if needed) and start the Spades app
+#  start.sh — Pull latest, build (if needed), and start the app
 #  Usage:  ~/spades/deploy/start.sh          (smart rebuild)
 #          ~/spades/deploy/start.sh --force  (always rebuild)
 # ─────────────────────────────────────────────────────────────
@@ -31,7 +31,14 @@ echo "          ♠  SPADES  —  Starting App"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# ── 1. Install dependencies if node_modules missing ───────────
+# ── 0. Pull latest code (hard reset avoids line-ending conflicts) ─
+step "[0/5] Syncing latest code from GitHub..."
+cd "$ROOT_DIR"
+git fetch origin main 2>&1 | grep -v "^$" || true
+git reset --hard origin/main
+ok "Code up to date ($(git log --oneline -1))"
+
+# ── 1. Install dependencies if node_modules missing ───────────────
 step "[1/5] Checking dependencies..."
 
 if [ ! -d "$CLIENT_DIR/node_modules" ]; then
@@ -50,16 +57,14 @@ else
   ok "Server dependencies present"
 fi
 
-# ── 2. Rebuild React if source is newer than build ────────────
+# ── 2. Rebuild React if source is newer than build ────────────────
 step "[2/5] Checking React build..."
 
 needs_build() {
-  # Always build if forced or build folder missing or index.html missing
   $FORCE_BUILD && return 0
   [ ! -d "$BUILD_DIR" ] && return 0
   [ ! -f "$BUILD_DIR/index.html" ] && return 0
 
-  # Check if any source file is newer than the build output
   LATEST_SRC=$(find "$CLIENT_DIR/src" "$CLIENT_DIR/index.html" \
     "$CLIENT_DIR/vite.config.js" "$CLIENT_DIR/tailwind.config.js" \
     -newer "$BUILD_DIR/index.html" 2>/dev/null | head -1)
@@ -70,14 +75,13 @@ needs_build() {
 if needs_build; then
   info "Building React app (this takes ~30s)..."
   cd "$CLIENT_DIR"
-  # Vite outputs directly to server/public (outDir in vite.config.js)
   npm run build 2>&1 | tail -5
   ok "React build complete → server/public"
 else
   ok "React build is up to date (use --force to rebuild)"
 fi
 
-# ── 3. Nginx ──────────────────────────────────────────────────
+# ── 3. Nginx ──────────────────────────────────────────────────────
 step "[3/5] Checking Nginx..."
 
 if ! command -v nginx &>/dev/null; then
@@ -91,7 +95,7 @@ else
   ok "Nginx started"
 fi
 
-# ── 4. PM2 + Node server ──────────────────────────────────────
+# ── 4. PM2 + Node server ──────────────────────────────────────────
 step "[4/5] Starting Node server..."
 
 if ! command -v pm2 &>/dev/null; then
@@ -108,7 +112,7 @@ else
   ok "spades-server started and saved to PM2"
 fi
 
-# ── 5. Health check ───────────────────────────────────────────
+# ── 5. Health check ───────────────────────────────────────────────
 step "[5/5] Health check..."
 sleep 2
 
@@ -127,7 +131,7 @@ else
   echo -e "   Run: ${YELLOW}sudo nginx -t${NC}"
 fi
 
-# ── Public IP ─────────────────────────────────────────────────
+# ── Public IP ─────────────────────────────────────────────────────
 TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" \
   -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" 2>/dev/null || true)
 if [ -n "$TOKEN" ]; then
