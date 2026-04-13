@@ -62,9 +62,28 @@ export default function RulesModal({ onClose }) {
 
           <Section title="Scoring">
             <ul className="space-y-1">
-              <Rule><strong className="text-white">Made your bid:</strong> earn 10 × bid points, plus 1 bonus point for each extra trick (overtrick) won beyond your bid.</Rule>
-              <Rule><strong className="text-white">Missed your bid:</strong> you score 0 points for that hand — no partial credit.</Rule>
-              <Rule>Example: bid 4, win 6 → <span className="text-green-400 font-mono">4×10 + 2 = 42 pts</span>. Bid 4, win 3 → <span className="text-red-400 font-mono">0 pts</span>.</Rule>
+              <Rule>Each trick you win is worth <strong className="text-white">+10 pts</strong>.</Rule>
+              <Rule>Each trick you fall <strong className="text-white">short</strong> of your bid costs <strong className="text-red-400">−10 pts</strong> per missing trick.</Rule>
+              <Rule>Each trick you win <strong className="text-white">beyond</strong> your bid (a bag) costs <strong className="text-red-400">−20 pts</strong> — overbidding is punished harder than underbidding.</Rule>
+              <Rule>Scores can go negative if you miss badly.</Rule>
+              <Rule>
+                <span className="font-mono text-xs leading-loose">
+                  Bid 4, win 4 → <span className="text-green-400">+40</span> &nbsp;·&nbsp;
+                  Bid 4, win 3 → <span className="text-yellow-300">+20</span> &nbsp;·&nbsp;
+                  Bid 4, win 5 → <span className="text-yellow-300">+30</span> &nbsp;·&nbsp;
+                  Bid 4, win 6 → <span className="text-yellow-300">+20</span> &nbsp;·&nbsp;
+                  Bid 4, win 0 → <span className="text-red-400">−40</span>
+                </span>
+              </Rule>
+            </ul>
+          </Section>
+
+          <Section title="Nil Bid">
+            <ul className="space-y-1">
+              <Rule>You may bid <strong className="text-purple-300">NIL</strong> — a declaration that you will win <strong className="text-white">zero tricks</strong> this hand.</Rule>
+              <Rule>Succeed (win 0 tricks) → <strong className="text-green-400">+50 pts</strong>.</Rule>
+              <Rule>Fail (win 1 or more tricks) → <strong className="text-red-400">−50 pts</strong>.</Rule>
+              <Rule>High risk, high reward — useful when you have a weak hand or want to catch up quickly.</Rule>
             </ul>
           </Section>
 

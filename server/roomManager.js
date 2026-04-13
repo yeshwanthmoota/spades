@@ -36,11 +36,13 @@ function createRoom(socketId, name) {
     currentTrick: [],
     leadSuit: null,
     spadesBroken: false,
-    targetScore: 200,
+    targetScore: 100,
     handHistory: [],
     trickHistory: [],
     roundNumber: 0,
-    rematchVotes: [],   // socketIds of players who voted to play again
+    rematchVotes: [],     // socketIds of players who voted to play again
+    credentials: {},      // { [playerName]: password } — wiped at game end
+    botTimers: {},        // { [playerName]: timeoutId } — pending bot moves
   };
 
   socketRoomMap[socketId] = code;
@@ -114,6 +116,30 @@ function getRoomBySocketId(socketId) {
   return code ? rooms[code] : null;
 }
 
+/** Remove a socket from the room map without removing the player from the room.
+ *  Used when a player disconnects mid-game (bot takes over, slot stays). */
+function clearSocketMapping(socketId) {
+  delete socketRoomMap[socketId];
+}
+
+/** Reassign a player's socketId — used on rejoin.
+ *  Updates both the socketRoomMap and the player object inside the room. */
+function updateSocketId(code, playerName, newSocketId) {
+  const room = rooms[code];
+  if (!room) return false;
+  const player = room.players.find(p => p.name === playerName);
+  if (!player) return false;
+
+  // Clean up old mapping
+  delete socketRoomMap[player.socketId];
+
+  // Apply new socket
+  player.socketId = newSocketId;
+  player.id = newSocketId;
+  socketRoomMap[newSocketId] = code;
+  return true;
+}
+
 module.exports = {
   rooms,
   createRoom,
@@ -121,4 +147,6 @@ module.exports = {
   removePlayer,
   getRoom,
   getRoomBySocketId,
+  clearSocketMapping,
+  updateSocketId,
 };

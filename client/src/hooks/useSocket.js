@@ -30,18 +30,19 @@ export function useSocket() {
     return () => socket.disconnect();
   }, []);
 
-  const createRoom  = useCallback((name)        => socketRef.current?.emit('create_room',   { name }), []);
-  const joinRoom    = useCallback((code, name)   => socketRef.current?.emit('join_room',     { code, name }), []);
-  const startGame   = useCallback((code)         => socketRef.current?.emit('start_game',    { code }), []);
-  const submitBid   = useCallback((code, bid)    => socketRef.current?.emit('submit_bid',    { code, bid }), []);
-  const playCard    = useCallback((code, card)   => socketRef.current?.emit('play_card',     { code, card }), []);
-  const voteRematch = useCallback((code, vote)   => socketRef.current?.emit('vote_rematch',  { code, vote }), []);
-  const startRematch= useCallback((code)         => socketRef.current?.emit('start_rematch', { code }), []);
-  const clearError  = useCallback(()             => setErrorMsg(null), []);
+  const createRoom      = useCallback((name, password)        => socketRef.current?.emit('create_room',      { name, password }), []);
+  const joinRoom        = useCallback((code, name, password)  => socketRef.current?.emit('join_room',        { code, name, password }), []);
+  const startGame       = useCallback((code)                  => socketRef.current?.emit('start_game',       { code }), []);
+  const submitBid       = useCallback((code, bid)             => socketRef.current?.emit('submit_bid',       { code, bid }), []);
+  const playCard        = useCallback((code, card)            => socketRef.current?.emit('play_card',        { code, card }), []);
+  const voteRematch     = useCallback((code, vote)            => socketRef.current?.emit('vote_rematch',     { code, vote }), []);
+  const startRematch    = useCallback((code)                  => socketRef.current?.emit('start_rematch',    { code }), []);
+  const setTargetScore  = useCallback((code, targetScore)     => socketRef.current?.emit('set_target_score', { code, targetScore }), []);
+  const clearError      = useCallback(()                      => setErrorMsg(null), []);
 
   return {
     connected, roomCode, gameState, errorMsg, mySocketId,
     createRoom, joinRoom, startGame, submitBid, playCard,
-    voteRematch, startRematch, clearError,
+    voteRematch, startRematch, setTargetScore, clearError,
   };
 }

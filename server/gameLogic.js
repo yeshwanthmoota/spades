@@ -97,13 +97,34 @@ function determineTrickWinner(trick) {
 }
 
 /**
- * calculateScore — 10 pts per bid + 1 pt per overtrick, or 0 if failed.
- * Returns the points earned THIS HAND (not cumulative).
+ * calculateScore — scoring rules:
+ *
+ *   NIL bid (bid === 0):
+ *     win 0 tricks → +50 pts
+ *     win ≥ 1 trick → −50 pts
+ *
+ *   Normal bid (bid ≥ 1):
+ *     +10 pts per trick won
+ *     −10 pts per undertrick (each trick short of bid)
+ *     −20 pts per overtrick / bag (each trick won beyond bid)
+ *
+ * Examples (normal):
+ *   bid 4, win 4 →  40 pts
+ *   bid 4, win 3 →  20 pts  (30 − 1×10)
+ *   bid 4, win 5 →  30 pts  (50 − 1×20)
+ *   bid 4, win 6 →  20 pts  (60 − 2×20)
  */
 function calculateScore(bid, tricksWon) {
-  if (bid === 0) return 0; // shouldn't happen since min bid is 1, but guard
-  if (tricksWon < bid) return 0;
-  return bid * 10 + (tricksWon - bid);
+  // Nil bid
+  if (bid === 0) {
+    return tricksWon === 0 ? 50 : -50;
+  }
+  const base = tricksWon * 10;
+  if (tricksWon < bid) {
+    return base - (bid - tricksWon) * 10;   // undertricks: −10 each
+  } else {
+    return base - (tricksWon - bid) * 20;   // bags: −20 each
+  }
 }
 
 /**
@@ -119,6 +140,43 @@ function isSpadesBroken(trickHistory) {
   return false;
 }
 
+// ─── Bot helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * botBid — estimate how many tricks a hand is likely to win.
+ * Counts high cards and strong spades.
+ */
+function botBid(hand) {
+  let estimate = 0;
+  for (const card of hand) {
+    if (card.rank === 'A') estimate += 1;
+    else if (card.rank === 'K') estimate += 0.75;
+    else if (card.rank === 'Q') estimate += 0.4;
+    else if (card.suit === 'SPADES' && RANK_VALUE[card.rank] >= RANK_VALUE['9']) estimate += 0.35;
+  }
+  return Math.max(1, Math.round(estimate)); // never bid Nil as a bot
+}
+
+/**
+ * botPlayCard — pick the best legal card to play conservatively.
+ * Tries to follow suit with the lowest legal card; avoids wasting high cards.
+ */
+function botPlayCard(hand, leadSuit, spadesBroken) {
+  // Get all valid cards
+  const valid = hand.filter(c => validatePlay(c, hand, leadSuit, spadesBroken).valid);
+  if (valid.length === 0) return hand[0]; // fallback (shouldn't happen)
+
+  // Sort: prefer non-spades, then lowest rank
+  const sorted = [...valid].sort((a, b) => {
+    const aSpade = a.suit === 'SPADES' ? 1 : 0;
+    const bSpade = b.suit === 'SPADES' ? 1 : 0;
+    if (aSpade !== bSpade) return aSpade - bSpade;
+    return RANK_VALUE[a.rank] - RANK_VALUE[b.rank];
+  });
+
+  return sorted[0];
+}
+
 module.exports = {
   createDeck,
   dealCards,
@@ -126,6 +184,8 @@ module.exports = {
   determineTrickWinner,
   calculateScore,
   isSpadesBroken,
+  botBid,
+  botPlayCard,
   SUITS,
   RANKS,
   RANK_VALUE,

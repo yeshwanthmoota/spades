@@ -10,8 +10,8 @@ export default function BidPanel({ gameState, mySocketId, roomCode, onSubmitBid 
 
   if (!gameState || gameState.status !== 'bidding') return null;
 
-  // Build bid options: 1 up to handSize only (can't win more tricks than cards held)
-  const bidOptions = Array.from({ length: handSize }, (_, i) => i + 1);
+  // Build bid options: NIL (0) first, then 1 up to handSize
+  const bidOptions = [0, ...Array.from({ length: handSize }, (_, i) => i + 1)];
 
   return (
     <div className="flex flex-col items-center pb-2 pt-1 w-full px-2">
@@ -61,14 +61,15 @@ export default function BidPanel({ gameState, mySocketId, roomCode, onSubmitBid 
               <button
                 key={n}
                 onClick={() => onSubmitBid(roomCode, n)}
-                className="
+                className={`
                   py-3 rounded-xl font-bold text-lg
-                  bg-felt-dark border border-white/10
-                  hover:bg-yellow-400 hover:text-black hover:border-yellow-400
-                  active:scale-95 transition-all duration-100
-                "
+                  border active:scale-95 transition-all duration-100
+                  ${n === 0
+                    ? 'bg-purple-900/60 border-purple-500 text-purple-300 hover:bg-purple-600 hover:text-white hover:border-purple-400'
+                    : 'bg-felt-dark border-white/10 hover:bg-yellow-400 hover:text-black hover:border-yellow-400'}
+                `}
               >
-                {n}
+                {n === 0 ? 'NIL' : n}
               </button>
             ))}
           </div>

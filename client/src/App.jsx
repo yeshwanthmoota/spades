@@ -8,7 +8,7 @@ export default function App() {
   const {
     connected, roomCode, gameState, errorMsg, mySocketId,
     createRoom, joinRoom, startGame, submitBid, playCard,
-    voteRematch, startRematch, clearError,
+    voteRematch, startRematch, setTargetScore, clearError,
   } = useSocket();
 
   const [showShuffle, setShowShuffle] = useState(false);
@@ -72,6 +72,7 @@ export default function App() {
           onCreateRoom={createRoom}
           onJoinRoom={joinRoom}
           onStartGame={startGame}
+          onSetTargetScore={setTargetScore}
           errorMsg={errorMsg}
           onClearError={clearError}
         />

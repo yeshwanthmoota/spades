@@ -8,6 +8,8 @@ const {
   validatePlay,
   determineTrickWinner,
   calculateScore,
+  botBid,
+  botPlayCard,
 } = require('./gameLogic');
 const {
   createRoom,
@@ -15,26 +17,25 @@ const {
   removePlayer,
   getRoom,
   getRoomBySocketId,
+  clearSocketMapping,
+  updateSocketId,
 } = require('./roomManager');
 
 const app = express();
 const server = http.createServer(app);
-
-const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] },
-});
+const io = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });
 
 // Serve React build
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/** Strip internal fields (credentials, timers) and opponent hands from the view */
 function roomView(room, requestingSocketId) {
+  const { credentials, botTimers, ...roomData } = room; // never send passwords to clients
   return {
-    ...room,
+    ...roomData,
     players: room.players.map(p => ({
       ...p,
       hand: p.socketId === requestingSocketId ? p.hand : p.hand.map(() => ({ hidden: true })),
@@ -42,15 +43,14 @@ function roomView(room, requestingSocketId) {
   };
 }
 
-// Single broadcast used for all phases — always sends game_update
 function broadcast(room) {
   for (const player of room.players) {
     const sock = io.sockets.sockets.get(player.socketId);
     if (sock) sock.emit('game_update', roomView(room, player.socketId));
   }
+  scheduleBot(room); // trigger bot if active player is disconnected
 }
 
-// Lobby uses room_update so the client can route correctly
 function broadcastLobby(room) {
   for (const player of room.players) {
     const sock = io.sockets.sockets.get(player.socketId);
@@ -67,7 +67,7 @@ function startBiddingPhase(room) {
   const firstBidderIndex = nextPlayerIndex(room, room.dealerIndex);
   room.currentTurn = room.players[firstBidderIndex].socketId;
   room.players.forEach(p => { p.bid = null; p.tricksWon = 0; });
-  console.log(`[${room.code}] Bidding phase. First bidder: ${room.currentTurn}`);
+  console.log(`[${room.code}] Bidding started. First bidder: ${room.currentTurn}`);
   broadcast(room);
 }
 
@@ -82,17 +82,22 @@ function startPlayingPhase(room) {
   room.trickHistory = [];
   const firstLeaderIndex = nextPlayerIndex(room, room.dealerIndex);
   room.currentTurn = room.players[firstLeaderIndex].socketId;
-  console.log(`[${room.code}] Playing phase. First lead: ${room.currentTurn}`);
+  console.log(`[${room.code}] Playing started. First lead: ${room.currentTurn}`);
   broadcast(room);
 }
 
 function advanceTurn(room) {
-  const currentIndex = room.players.findIndex(p => p.socketId === room.currentTurn);
-  room.currentTurn = room.players[nextPlayerIndex(room, currentIndex)].socketId;
+  const idx = room.players.findIndex(p => p.socketId === room.currentTurn);
+  room.currentTurn = room.players[nextPlayerIndex(room, idx)].socketId;
 }
 
 function checkHandComplete(room) {
   return room.players.every(p => p.hand.length === 0);
+}
+
+function wipeCredentials(room) {
+  room.credentials = {};
+  console.log(`[${room.code}] Credentials wiped`);
 }
 
 function resolveHand(room) {
@@ -115,9 +120,10 @@ function resolveHand(room) {
       room.winner = leaders[0].name;
       room.rematchVotes = [];
       gameOver = true;
+      wipeCredentials(room); // session ends — wipe all passwords
       console.log(`[${room.code}] Game over! Winner: ${room.winner}`);
     } else {
-      console.log(`[${room.code}] Tie at ${maxScore} — playing another round`);
+      console.log(`[${room.code}] Tie — playing another round`);
     }
   }
 
@@ -133,43 +139,154 @@ function resolveHand(room) {
   }
 }
 
-// ─── Socket Events ───────────────────────────────────────────────────────────
+// ─── Bot scheduling ───────────────────────────────────────────────────────────
+
+function scheduleBot(room) {
+  if (room.status !== 'bidding' && room.status !== 'playing') return;
+
+  const current = room.players.find(p => p.socketId === room.currentTurn);
+  if (!current || !current.disconnected) return;
+
+  const name = current.name;
+  if (room.botTimers[name]) return; // already pending
+
+  console.log(`[bot] Scheduling move for disconnected player: ${name}`);
+
+  room.botTimers[name] = setTimeout(() => {
+    delete room.botTimers[name];
+
+    // Re-validate — state may have changed (player reconnected, etc.)
+    const player = room.players.find(p => p.name === name);
+    if (!player || !player.disconnected || room.currentTurn !== player.socketId) return;
+
+    if (room.status === 'bidding') {
+      player.bid = botBid(player.hand);
+      console.log(`[bot] ${name} bids ${player.bid}`);
+      if (allBidsSubmitted(room)) startPlayingPhase(room);
+      else { advanceTurn(room); broadcast(room); }
+
+    } else if (room.status === 'playing') {
+      const card = botPlayCard(player.hand, room.leadSuit, room.spadesBroken);
+      if (!card) return;
+
+      player.hand = player.hand.filter(c => !(c.suit === card.suit && c.rank === card.rank));
+      if (room.currentTrick.length === 0) room.leadSuit = card.suit;
+      room.currentTrick.push({ playerId: player.socketId, card });
+      if (card.suit === 'SPADES' && !room.spadesBroken) {
+        room.spadesBroken = true;
+        console.log(`[bot] Spades broken by bot!`);
+      }
+      console.log(`[bot] ${name} plays ${card.rank} of ${card.suit}`);
+
+      if (room.currentTrick.length === room.players.length) {
+        const winnerId = determineTrickWinner(room.currentTrick);
+        const winner = room.players.find(p => p.socketId === winnerId);
+        winner.tricksWon += 1;
+        room.trickHistory.push([...room.currentTrick]);
+        room.currentTrick = [];
+        room.leadSuit = null;
+        room.currentTurn = winnerId;
+        broadcast(room);
+        if (checkHandComplete(room)) resolveHand(room);
+      } else {
+        advanceTurn(room);
+        broadcast(room);
+      }
+    }
+  }, 2000); // 2-second delay so it doesn't feel instant
+}
+
+// ─── Socket Events ────────────────────────────────────────────────────────────
 
 io.on('connection', (socket) => {
   console.log(`[connect] ${socket.id}`);
 
-  // ── create_room ──────────────────────────────────────────────────────────
-  socket.on('create_room', ({ name }) => {
+  // ── create_room ────────────────────────────────────────────────────────────
+  socket.on('create_room', ({ name, password }) => {
     console.log(`[create_room] socket=${socket.id} name=${name}`);
-    if (!name || !name.trim()) { socket.emit('error', { message: 'Name is required' }); return; }
+    if (!name?.trim()) { socket.emit('error', { message: 'Name is required' }); return; }
+    if (!password?.trim()) { socket.emit('error', { message: 'Password is required' }); return; }
+
     const { code, room } = createRoom(socket.id, name.trim());
+    room.credentials[name.trim()] = password.trim();
     socket.join(code);
     socket.emit('room_created', { code });
     broadcastLobby(room);
     console.log(`[create_room] Room ${code} created by ${name}`);
   });
 
-  // ── join_room ─────────────────────────────────────────────────────────────
-  socket.on('join_room', ({ code, name }) => {
+  // ── join_room ──────────────────────────────────────────────────────────────
+  socket.on('join_room', ({ code, name, password }) => {
     console.log(`[join_room] socket=${socket.id} code=${code} name=${name}`);
-    if (!name || !name.trim() || !code) { socket.emit('error', { message: 'Name and room code are required' }); return; }
-    const result = joinRoom(code.toUpperCase(), socket.id, name.trim());
+    if (!name?.trim() || !code) { socket.emit('error', { message: 'Name and room code are required' }); return; }
+    if (!password?.trim()) { socket.emit('error', { message: 'Password is required' }); return; }
+
+    const upperCode = code.toUpperCase();
+    const room = getRoom(upperCode);
+    if (!room) { socket.emit('error', { message: 'Room not found' }); return; }
+
+    // ── Rejoin during active game ────────────────────────────────────────────
+    if (room.status === 'bidding' || room.status === 'playing') {
+      const disconnectedPlayer = room.players.find(
+        p => p.name === name.trim() && p.disconnected
+      );
+      if (disconnectedPlayer) {
+        // Verify password
+        if (room.credentials[name.trim()] !== password.trim()) {
+          socket.emit('error', { message: 'Incorrect password — cannot rejoin' });
+          return;
+        }
+        // Cancel any pending bot timer
+        if (room.botTimers[name.trim()]) {
+          clearTimeout(room.botTimers[name.trim()]);
+          delete room.botTimers[name.trim()];
+        }
+        // Transfer the player slot to the new socket
+        updateSocketId(upperCode, name.trim(), socket.id);
+        disconnectedPlayer.disconnected = false;
+
+        socket.join(upperCode);
+        socket.emit('room_joined', { code: upperCode });
+        broadcast(room);
+        console.log(`[rejoin] ${name} rejoined room ${upperCode}`);
+        return;
+      }
+      socket.emit('error', { message: 'Game already in progress' });
+      return;
+    }
+
+    // ── Normal join (lobby or finished) ──────────────────────────────────────
+    const result = joinRoom(upperCode, socket.id, name.trim());
     if (!result.success) { socket.emit('error', { message: result.error }); return; }
-    socket.join(code.toUpperCase());
-    socket.emit('room_joined', { code: code.toUpperCase() });
-    // Use appropriate broadcast depending on room status
+
+    room.credentials[name.trim()] = password.trim();
+    socket.join(upperCode);
+    socket.emit('room_joined', { code: upperCode });
     if (result.room.status === 'lobby') broadcastLobby(result.room);
     else broadcast(result.room);
-    console.log(`[join_room] ${name} joined room ${code.toUpperCase()} (status: ${result.room.status})`);
+    console.log(`[join_room] ${name} joined room ${upperCode}`);
   });
 
-  // ── start_game ────────────────────────────────────────────────────────────
+  // ── set_target_score ───────────────────────────────────────────────────────
+  socket.on('set_target_score', ({ code, targetScore }) => {
+    console.log(`[set_target_score] socket=${socket.id} code=${code} target=${targetScore}`);
+    const room = getRoom(code);
+    if (!room || room.status !== 'lobby') return;
+    const player = room.players.find(p => p.socketId === socket.id);
+    if (!player?.isHost) { socket.emit('error', { message: 'Only the host can set the target score' }); return; }
+    if (![100, 200].includes(Number(targetScore))) { socket.emit('error', { message: 'Target score must be 100 or 200' }); return; }
+    room.targetScore = Number(targetScore);
+    broadcastLobby(room);
+    console.log(`[set_target_score] Room ${code} target set to ${targetScore}`);
+  });
+
+  // ── start_game ─────────────────────────────────────────────────────────────
   socket.on('start_game', ({ code }) => {
     console.log(`[start_game] socket=${socket.id} code=${code}`);
     const room = getRoom(code);
     if (!room) { socket.emit('error', { message: 'Room not found' }); return; }
     const player = room.players.find(p => p.socketId === socket.id);
-    if (!player || !player.isHost) { socket.emit('error', { message: 'Only the host can start the game' }); return; }
+    if (!player?.isHost) { socket.emit('error', { message: 'Only the host can start the game' }); return; }
     if (room.players.length < 2) { socket.emit('error', { message: 'Need at least 2 players to start' }); return; }
     if (room.status !== 'lobby') { socket.emit('error', { message: 'Game already started' }); return; }
 
@@ -178,10 +295,10 @@ io.on('connection', (socket) => {
     room.roundNumber = 1;
     room.spadesBroken = false;
     startBiddingPhase(room);
-    console.log(`[start_game] Game started in room ${code} with ${room.players.length} players`);
+    console.log(`[start_game] Game started in room ${code} (target: ${room.targetScore})`);
   });
 
-  // ── submit_bid ────────────────────────────────────────────────────────────
+  // ── submit_bid ─────────────────────────────────────────────────────────────
   socket.on('submit_bid', ({ code, bid }) => {
     console.log(`[submit_bid] socket=${socket.id} code=${code} bid=${bid}`);
     const room = getRoom(code);
@@ -190,17 +307,16 @@ io.on('connection', (socket) => {
     if (room.currentTurn !== socket.id) { socket.emit('error', { message: 'Not your turn to bid' }); return; }
 
     const bidNum = parseInt(bid, 10);
-    if (isNaN(bidNum) || bidNum < 1) { socket.emit('error', { message: 'Bid must be at least 1' }); return; }
+    if (isNaN(bidNum) || bidNum < 0) { socket.emit('error', { message: 'Invalid bid' }); return; }
 
     const player = room.players.find(p => p.socketId === socket.id);
     player.bid = bidNum;
-    console.log(`[submit_bid] ${player.name} bid ${bidNum} in room ${code}`);
-
+    console.log(`[submit_bid] ${player.name} bid ${bidNum}`);
     if (allBidsSubmitted(room)) startPlayingPhase(room);
     else { advanceTurn(room); broadcast(room); }
   });
 
-  // ── play_card ─────────────────────────────────────────────────────────────
+  // ── play_card ──────────────────────────────────────────────────────────────
   socket.on('play_card', ({ code, card }) => {
     console.log(`[play_card] socket=${socket.id} code=${code} card=${card.rank} of ${card.suit}`);
     const room = getRoom(code);
@@ -215,66 +331,56 @@ io.on('connection', (socket) => {
     player.hand = player.hand.filter(c => !(c.suit === card.suit && c.rank === card.rank));
     if (room.currentTrick.length === 0) room.leadSuit = card.suit;
     room.currentTrick.push({ playerId: socket.id, card });
-
     if (card.suit === 'SPADES' && !room.spadesBroken) {
       room.spadesBroken = true;
       console.log(`[${code}] Spades broken!`);
     }
-
     console.log(`[play_card] ${player.name} played ${card.rank} of ${card.suit}`);
 
     if (room.currentTrick.length === room.players.length) {
       const winnerId = determineTrickWinner(room.currentTrick);
       const winner = room.players.find(p => p.socketId === winnerId);
       winner.tricksWon += 1;
-      console.log(`[${code}] Trick won by ${winner.name}`);
       room.trickHistory.push([...room.currentTrick]);
       room.currentTrick = [];
       room.leadSuit = null;
       room.currentTurn = winnerId;
       broadcast(room);
-      if (checkHandComplete(room)) {
-        console.log(`[${code}] Hand complete — resolving scores`);
-        resolveHand(room);
-      }
+      if (checkHandComplete(room)) resolveHand(room);
     } else {
       advanceTurn(room);
       broadcast(room);
     }
   });
 
-  // ── vote_rematch ──────────────────────────────────────────────────────────
+  // ── vote_rematch ───────────────────────────────────────────────────────────
   socket.on('vote_rematch', ({ code, vote }) => {
     console.log(`[vote_rematch] socket=${socket.id} code=${code} vote=${vote}`);
     const room = getRoom(code);
-    if (!room || room.status !== 'finished') { socket.emit('error', { message: 'No game to rematch' }); return; }
-
+    if (!room || room.status !== 'finished') { socket.emit('error', { message: 'No finished game to rematch' }); return; }
     if (vote === false) {
-      // Player opts out — remove them from the room
       removePlayer(socket.id);
       socket.leave(code);
-      console.log(`[vote_rematch] Player left the room (no rematch)`);
       if (room) broadcast(room);
     } else {
-      // Player wants to play again
       if (!room.rematchVotes.includes(socket.id)) room.rematchVotes.push(socket.id);
-      console.log(`[vote_rematch] ${socket.id} voted yes (${room.rematchVotes.length}/${room.players.length})`);
       broadcast(room);
     }
   });
 
-  // ── start_rematch ─────────────────────────────────────────────────────────
+  // ── start_rematch ──────────────────────────────────────────────────────────
   socket.on('start_rematch', ({ code }) => {
     console.log(`[start_rematch] socket=${socket.id} code=${code}`);
     const room = getRoom(code);
     if (!room) { socket.emit('error', { message: 'Room not found' }); return; }
     if (room.status !== 'finished') { socket.emit('error', { message: 'No finished game to rematch' }); return; }
     const player = room.players.find(p => p.socketId === socket.id);
-    if (!player || !player.isHost) { socket.emit('error', { message: 'Only the host can start the rematch' }); return; }
+    if (!player?.isHost) { socket.emit('error', { message: 'Only the host can start the rematch' }); return; }
     if (room.players.length < 2) { socket.emit('error', { message: 'Need at least 2 players' }); return; }
 
-    // Reset game state — fresh scores, keep players and room code
-    room.players.forEach(p => { p.score = 0; p.bid = null; p.tricksWon = 0; p.hand = []; });
+    // Full reset — wipe credentials so everyone must re-enter for next game
+    wipeCredentials(room);
+    room.players.forEach(p => { p.score = 0; p.bid = null; p.tricksWon = 0; p.hand = []; p.disconnected = false; });
     room.handHistory = [];
     room.trickHistory = [];
     room.currentTrick = [];
@@ -284,30 +390,43 @@ io.on('connection', (socket) => {
     room.dealerIndex = 0;
     room.roundNumber = 1;
     room.rematchVotes = [];
+    room.botTimers = {};
 
     const hands = dealCards(room.players.length);
     room.players.forEach((p, i) => { p.hand = hands[i]; });
-
     startBiddingPhase(room);
-    console.log(`[start_rematch] Rematch started in room ${code} with ${room.players.length} players`);
+    console.log(`[start_rematch] Rematch started in room ${code}`);
   });
 
-  // ── disconnect ────────────────────────────────────────────────────────────
+  // ── disconnect ─────────────────────────────────────────────────────────────
   socket.on('disconnect', () => {
     console.log(`[disconnect] ${socket.id}`);
-    const result = removePlayer(socket.id);
-    if (!result) return;
-    if (!result.deleted && result.room) {
-      if (result.room.status === 'lobby') broadcastLobby(result.room);
-      else broadcast(result.room);
-      console.log(`[disconnect] Player removed from room ${result.code}`);
+    const room = getRoomBySocketId(socket.id);
+    if (!room) return;
+
+    if (room.status === 'bidding' || room.status === 'playing') {
+      // Active game: mark as disconnected — bot takes over
+      const player = room.players.find(p => p.socketId === socket.id);
+      if (player) {
+        player.disconnected = true;
+        console.log(`[disconnect] ${player.name} disconnected mid-game — bot taking over`);
+        clearSocketMapping(socket.id); // remove stale mapping, keep player in room
+        broadcast(room); // triggers scheduleBot if it's their turn
+      }
     } else {
-      console.log(`[disconnect] Room ${result.code} deleted (empty)`);
+      // Lobby or finished: remove normally
+      const result = removePlayer(socket.id);
+      if (!result) return;
+      if (!result.deleted && result.room) {
+        if (result.room.status === 'lobby') broadcastLobby(result.room);
+        else broadcast(result.room);
+        console.log(`[disconnect] Player removed from room ${result.code}`);
+      } else {
+        console.log(`[disconnect] Room ${result.code} deleted (empty)`);
+      }
     }
   });
 });
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`Spades server listening on port ${PORT}`);
-});
+server.listen(PORT, () => console.log(`Spades server listening on port ${PORT}`));

@@ -56,12 +56,21 @@ function Avatar({ name, isActive, size = 'md' }) {
 
 function OpponentSlot({ player, isActive, currentTrickCard }) {
   const handCount = player.hand?.length ?? 0;
+  const isDisconnected = player.disconnected === true;
   return (
     <div className="flex flex-col items-center gap-0.5 min-w-[64px]">
-      <Avatar name={player.name} isActive={isActive} />
+      <div className="relative">
+        <Avatar name={player.name} isActive={isActive} />
+        {isDisconnected && (
+          <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[9px] font-bold px-1 py-0.5 rounded-full leading-none">
+            BOT
+          </span>
+        )}
+      </div>
       <p className={`text-xs font-semibold truncate max-w-[72px] text-center leading-tight
-        ${isActive ? 'text-blue-300' : 'text-gray-300'}`}>
+        ${isDisconnected ? 'text-orange-400' : isActive ? 'text-blue-300' : 'text-gray-300'}`}>
         {player.name}
+        {isDisconnected && <span className="text-orange-500"> ⚙</span>}
       </p>
       <p className={`text-xs font-mono ${isActive ? 'text-yellow-300' : 'text-gray-500'}`}>
         {player.bid !== null && player.bid !== undefined ? `${player.tricksWon}/${player.bid}` : '—'}
@@ -114,8 +123,15 @@ function RematchOverlay({ gameState, mySocketId, roomCode, onVote, onStartRematc
         <div className="flex justify-center gap-3 flex-wrap mb-5">
           {players.map(p => (
             <div key={p.socketId} className="flex flex-col items-center text-xs gap-0.5">
-              <Avatar name={p.name} isActive={false} size="sm" />
-              <span className="text-gray-400 truncate max-w-[56px]">{p.name}</span>
+              <div className="relative">
+                <Avatar name={p.name} isActive={false} size="sm" />
+                {p.disconnected && (
+                  <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[9px] font-bold px-1 py-0.5 rounded-full leading-none">
+                    BOT
+                  </span>
+                )}
+              </div>
+              <span className={`truncate max-w-[56px] ${p.disconnected ? 'text-orange-400' : 'text-gray-400'}`}>{p.name}</span>
               <span>{rematchVotes.includes(p.socketId)
                 ? <span className="text-green-400">✔ Ready</span>
                 : <span className="text-gray-600">…</span>}
