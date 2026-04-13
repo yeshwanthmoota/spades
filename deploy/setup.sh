@@ -35,7 +35,7 @@ step 2 "Installing Node.js 20"
 if command -v node &>/dev/null && [[ "$(node -v)" == v20* ]]; then
   ok "Node.js 20 already installed ($(node -v))"
 else
-  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - -q
+  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
   sudo apt-get install -y -q nodejs
   ok "Installed Node.js $(node -v) / npm $(npm -v)"
 fi
