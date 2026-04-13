@@ -158,10 +158,11 @@ export default function RulesModal({ onClose }) {
             <Section title="Bidding Rules">
               <ul className="space-y-1">
                 <GullyRule>Each player bids <strong className="text-white">0 to hand size</strong> (no Nil concept — 0 is just a regular bid).</GullyRule>
-                <GullyRule><strong className="text-orange-300">Key constraint:</strong> the running sum of all bids must NOT be divisible by the number of players at any point.</GullyRule>
-                <GullyRule>If a bid would make the running sum divisible by the player count, that bid is <strong className="text-red-400">blocked</strong> — you must choose a different number.</GullyRule>
-                <GullyRule>Invalid bids are highlighted in the bid panel so you can see which choices are allowed.</GullyRule>
-                <GullyRule>This rule ensures someone is always under-bidding or over-bidding — keeping the game tense.</GullyRule>
+                <GullyRule>All players except the last bidder may bid freely — <strong className="text-white">no restrictions</strong>.</GullyRule>
+                <GullyRule><strong className="text-orange-300">The Hook (last bidder only):</strong> the last player to bid cannot choose the number that would make the total sum equal the tricks available that round.</GullyRule>
+                <GullyRule>Example with 4 players, 3 cards dealt: if previous bids total 2, the last player <strong className="text-red-400">cannot bid 1</strong> (2+1=3), but can bid 0, 2, or 3.</GullyRule>
+                <GullyRule>The blocked bid is highlighted in the panel so the last bidder always knows which value is off-limits.</GullyRule>
+                <GullyRule>This guarantees someone is always over- or under-bidding, keeping every round tense.</GullyRule>
               </ul>
             </Section>
 
