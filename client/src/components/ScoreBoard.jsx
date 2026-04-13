@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { getGullyCardsForRound, getGullyTotalRounds } from '../utils/gameRules';
 
-function handEarned(bid, tricksWon, isGully) {
+function earnedThisRound(bid, tricksWon, isGully) {
+  if (bid === null || bid === undefined) return null;
   if (isGully) return bid === tricksWon ? bid * 11 + 10 : 0;
   if (bid === 0) return tricksWon === 0 ? 50 : -50;
   const base = tricksWon * 10;
@@ -10,19 +11,15 @@ function handEarned(bid, tricksWon, isGully) {
     : base - (tricksWon - bid) * 20;
 }
 
-function PtsCell({ pts }) {
+function PtsSpan({ pts }) {
+  if (pts === null) return <span className="text-gray-600">—</span>;
   const color = pts > 0 ? 'text-green-400' : pts < 0 ? 'text-red-400' : 'text-gray-500';
   return <span className={`font-mono tabular-nums ${color}`}>{pts > 0 ? `+${pts}` : pts}</span>;
 }
 
-function DevCell({ bid, tricksWon, isGully }) {
-  if (bid === null || bid === undefined) return <span className="text-gray-600">—</span>;
-  const dev = tricksWon - bid;
-  if (dev === 0) return <span className="text-green-400">✓</span>;
-  if (isGully)   return <span className="text-red-400">✗</span>;
-  return dev > 0
-    ? <span className="text-orange-400 font-mono tabular-nums">+{dev}</span>
-    : <span className="text-red-400 font-mono tabular-nums">{dev}</span>;
+function ScoreSpan({ score }) {
+  const color = score > 0 ? 'text-green-400' : score < 0 ? 'text-red-400' : 'text-gray-400';
+  return <span className={`font-mono font-bold tabular-nums ${color}`}>{score > 0 ? `+${score}` : score}</span>;
 }
 
 export default function ScoreBoard({ gameState, mySocketId }) {
@@ -36,9 +33,10 @@ export default function ScoreBoard({ gameState, mySocketId }) {
 
   return (
     <>
+      {/* Scores button lives in the shared top bar */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="fixed top-3 right-3 z-40 bg-felt-dark border border-gray-600 rounded-lg px-3 py-1.5 text-sm font-semibold hover:bg-felt transition"
+        className="fixed top-0 right-0 h-12 z-40 flex items-center px-4 text-sm font-semibold hover:bg-white/5 transition border-l border-white/5"
       >
         Scores
       </button>
@@ -54,7 +52,7 @@ export default function ScoreBoard({ gameState, mySocketId }) {
                 <p className="text-xs text-gray-500 mt-0.5">
                   {isGully
                     ? 'Exact bid: (bid×11)+10 pts · Miss: 0 pts'
-                    : 'Exact: bid×10 · Bags +1 over: −20 · Undertrick: −10'}
+                    : 'Exact: bid×10 · Over (bags): −20 each · Under: −10 each'}
                 </p>
               </div>
               <span className="text-xs text-gray-400 bg-gray-800 rounded-full px-2.5 py-1 shrink-0 ml-3 mt-0.5">
@@ -62,44 +60,49 @@ export default function ScoreBoard({ gameState, mySocketId }) {
               </span>
             </div>
 
-            {/* ── Current Scores ─────────────────────────────────────── */}
+            {/* ── Current round scores ──────────────────────────────── */}
             <div className="rounded-xl overflow-hidden border border-white/5">
-              <table className="w-full text-sm border-collapse">
+              <table className="w-full text-sm table-fixed border-collapse">
+                <colgroup>
+                  <col />                          {/* Player — fills remaining space */}
+                  <col style={{ width: '3rem' }} />{/* Bid */}
+                  <col style={{ width: '3rem' }} />{/* Won */}
+                  <col style={{ width: '3.5rem' }}/>{/* +/- */}
+                  <col style={{ width: '4rem' }} />{/* Total */}
+                </colgroup>
                 <thead>
-                  <tr className="bg-gray-800/70 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                  <tr className="bg-gray-800/70 text-xs text-gray-400 uppercase tracking-wide">
                     <th className="text-left px-3 py-2 font-semibold">Player</th>
-                    <th className="text-right px-3 py-2 font-semibold w-12">Bid</th>
-                    <th className="text-right px-3 py-2 font-semibold w-12">Won</th>
-                    <th className="text-right px-3 py-2 font-semibold w-10">±</th>
-                    <th className="text-right px-3 py-2 font-semibold w-16">Score</th>
+                    <th className="text-right px-2 py-2 font-semibold">Bid</th>
+                    <th className="text-right px-2 py-2 font-semibold">Won</th>
+                    <th className="text-right px-2 py-2 font-semibold">+/−</th>
+                    <th className="text-right px-3 py-2 font-semibold">Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sortedPlayers.map((p, idx) => {
                     const isMe = p.socketId === mySocketId;
+                    const pts = earnedThisRound(p.bid, p.tricksWon, isGully);
                     return (
                       <tr
                         key={p.socketId}
-                        className={`border-t border-white/5
-                          ${idx % 2 === 1 ? 'bg-white/[0.015]' : ''}
-                          ${isMe ? 'bg-yellow-400/10' : ''}`}
-                        style={isMe ? { borderLeft: '2px solid #facc15' } : {}}
+                        className={`border-t border-white/5 ${idx % 2 === 1 ? 'bg-white/[0.015]' : ''} ${isMe ? 'bg-yellow-400/10' : ''}`}
+                        style={isMe ? { boxShadow: 'inset 2px 0 0 #facc15' } : {}}
                       >
-                        <td className={`px-3 py-2.5 font-semibold ${isMe ? 'text-yellow-300' : 'text-white'}`}>
+                        <td className={`px-3 py-2.5 font-semibold truncate ${isMe ? 'text-yellow-300' : 'text-white'}`}>
                           {p.name}{isMe ? ' ★' : ''}
                         </td>
-                        <td className="text-right px-3 py-2.5 font-mono tabular-nums text-gray-300">
+                        <td className="text-right px-2 py-2.5 font-mono tabular-nums text-gray-300">
                           {p.bid ?? '—'}
                         </td>
-                        <td className="text-right px-3 py-2.5 font-mono tabular-nums text-gray-300">
+                        <td className="text-right px-2 py-2.5 font-mono tabular-nums text-gray-300">
                           {p.tricksWon}
                         </td>
-                        <td className="text-right px-3 py-2.5">
-                          <DevCell bid={p.bid} tricksWon={p.tricksWon} isGully={isGully} />
+                        <td className="text-right px-2 py-2.5">
+                          <PtsSpan pts={pts} />
                         </td>
-                        <td className={`text-right px-3 py-2.5 font-mono font-bold tabular-nums
-                          ${p.score > 0 ? 'text-green-400' : p.score < 0 ? 'text-red-400' : 'text-gray-400'}`}>
-                          {p.score > 0 ? `+${p.score}` : p.score}
+                        <td className="text-right px-3 py-2.5">
+                          <ScoreSpan score={p.score} />
                         </td>
                       </tr>
                     );
@@ -107,12 +110,11 @@ export default function ScoreBoard({ gameState, mySocketId }) {
                 </tbody>
               </table>
             </div>
-
-            <p className="text-xs text-gray-600 mt-1.5 text-right">
-              {isGully ? '✓ exact · ✗ missed' : '✓ exact · +N bags · −N under'}
+            <p className="text-xs text-gray-600 mt-1 text-right">
+              +/− shows points earned this round
             </p>
 
-            {/* ── Hand History ────────────────────────────────────────── */}
+            {/* ── Hand History ─────────────────────────────────────── */}
             {handHistory && handHistory.length > 0 && (
               <div className="mt-5">
                 <h3 className="text-sm font-semibold text-gray-400 mb-2">Hand History</h3>
@@ -121,9 +123,16 @@ export default function ScoreBoard({ gameState, mySocketId }) {
                     const roundCards = isGully ? getGullyCardsForRound(i + 1, players.length) : null;
                     return (
                       <div key={i} className="rounded-xl overflow-hidden border border-white/5">
-                        <table className="w-full text-xs border-collapse">
+                        <table className="w-full text-xs table-fixed border-collapse">
+                          <colgroup>
+                            <col />
+                            <col style={{ width: '3rem' }} />
+                            <col style={{ width: '3rem' }} />
+                            <col style={{ width: '3.5rem' }} />
+                            <col style={{ width: '4rem' }} />
+                          </colgroup>
                           <thead>
-                            <tr className="bg-gray-800/60 text-gray-400 font-semibold">
+                            <tr className="bg-gray-800/60">
                               <th className="text-left px-3 py-1.5 font-semibold text-gray-300">
                                 Hand {i + 1}
                                 {isGully && (
@@ -132,33 +141,28 @@ export default function ScoreBoard({ gameState, mySocketId }) {
                                   </span>
                                 )}
                               </th>
-                              <th className="text-right px-3 py-1.5 font-semibold w-10">Bid</th>
-                              <th className="text-right px-3 py-1.5 font-semibold w-10">Won</th>
-                              <th className="text-right px-3 py-1.5 font-semibold w-12">Pts</th>
-                              <th className="text-right px-3 py-1.5 font-semibold w-16">Total</th>
+                              <th className="text-right px-2 py-1.5 font-semibold text-gray-500">Bid</th>
+                              <th className="text-right px-2 py-1.5 font-semibold text-gray-500">Won</th>
+                              <th className="text-right px-2 py-1.5 font-semibold text-gray-500">+/−</th>
+                              <th className="text-right px-3 py-1.5 font-semibold text-gray-500">Total</th>
                             </tr>
                           </thead>
                           <tbody>
                             {hand.map((p, pi) => {
-                              const pts = handEarned(p.bid, p.tricksWon, isGully);
+                              const pts = earnedThisRound(p.bid, p.tricksWon, isGully);
                               const isMe = players.find(pl => pl.name === p.name)?.socketId === mySocketId;
                               return (
                                 <tr
                                   key={p.name}
-                                  className={`border-t border-white/5
-                                    ${pi % 2 === 1 ? 'bg-white/[0.015]' : ''}
-                                    ${isMe ? 'bg-yellow-400/5' : ''}`}
+                                  className={`border-t border-white/5 ${pi % 2 === 1 ? 'bg-white/[0.015]' : ''} ${isMe ? 'bg-yellow-400/5' : ''}`}
                                 >
-                                  <td className={`px-3 py-1.5 font-medium ${isMe ? 'text-yellow-300' : 'text-gray-300'}`}>
+                                  <td className={`px-3 py-1.5 font-medium truncate ${isMe ? 'text-yellow-300' : 'text-gray-300'}`}>
                                     {p.name}
                                   </td>
-                                  <td className="text-right px-3 py-1.5 font-mono tabular-nums text-gray-400">{p.bid}</td>
-                                  <td className="text-right px-3 py-1.5 font-mono tabular-nums text-gray-400">{p.tricksWon}</td>
-                                  <td className="text-right px-3 py-1.5"><PtsCell pts={pts} /></td>
-                                  <td className={`text-right px-3 py-1.5 font-mono font-semibold tabular-nums
-                                    ${p.score > 0 ? 'text-green-400' : p.score < 0 ? 'text-red-400' : 'text-gray-500'}`}>
-                                    {p.score > 0 ? `+${p.score}` : p.score}
-                                  </td>
+                                  <td className="text-right px-2 py-1.5 font-mono tabular-nums text-gray-400">{p.bid}</td>
+                                  <td className="text-right px-2 py-1.5 font-mono tabular-nums text-gray-400">{p.tricksWon}</td>
+                                  <td className="text-right px-2 py-1.5"><PtsSpan pts={pts} /></td>
+                                  <td className="text-right px-3 py-1.5"><ScoreSpan score={p.score} /></td>
                                 </tr>
                               );
                             })}

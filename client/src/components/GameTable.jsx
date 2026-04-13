@@ -30,10 +30,12 @@ function arrangeSeats(players, mySocketId) {
   return rotated.map((player, i) => ({ player, position: posMap[i] }));
 }
 
+// Top bar is fixed h-12 (48px). Top players sit below it with top-14 (56px).
+// Left/right players are vertically centred; bottom players are at the bottom edge.
 const POSITION_CLASSES = {
-  top:            'absolute top-3 left-1/2 -translate-x-1/2',
-  'top-left':     'absolute top-3 left-[18%]',
-  'top-right':    'absolute top-3 right-[18%]',
+  top:            'absolute top-14 left-1/2 -translate-x-1/2',
+  'top-left':     'absolute top-14 left-[18%]',
+  'top-right':    'absolute top-14 right-[18%]',
   left:           'absolute left-2 top-1/2 -translate-y-1/2',
   right:          'absolute right-2 top-1/2 -translate-y-1/2',
   'bottom-left':  'absolute bottom-2 left-[18%]',
@@ -194,17 +196,23 @@ export default function GameTable({
       {/* Rules modal */}
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
 
-      {/* Top bar: Rules (left) + Room code (centre) */}
-      <div className="relative h-0">
-        <button onClick={() => setShowRules(true)}
-          className="fixed top-3 left-3 z-40 bg-felt-dark border border-gray-600 rounded-lg px-3 py-1.5 text-sm font-semibold hover:bg-felt transition">
-          ♠ Rules
-        </button>
-        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-40 bg-felt-dark border border-gray-600 rounded-lg px-3 py-1.5 flex items-center gap-2">
-          <span className="text-gray-500 text-xs">ROOM</span>
-          <span className="font-mono font-bold text-yellow-300 tracking-widest text-sm">{roomCode}</span>
-        </div>
+      {/* ── Fixed top bar ────────────────────────────────────────────────────── */}
+      {/* Background strip */}
+      <div className="fixed top-0 left-0 right-0 h-12 z-30 bg-felt-dark border-b border-white/5 pointer-events-none" />
+
+      {/* Rules — left */}
+      <button onClick={() => setShowRules(true)}
+        className="fixed top-0 left-0 h-12 z-40 flex items-center px-4 text-sm font-semibold hover:bg-white/5 transition border-r border-white/5">
+        ♠ Rules
+      </button>
+
+      {/* Room code — centre */}
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 h-12 z-40 flex items-center gap-2 px-4 pointer-events-none">
+        <span className="text-gray-500 text-xs tracking-wide">ROOM</span>
+        <span className="font-mono font-bold text-yellow-300 tracking-widest text-sm">{roomCode}</span>
       </div>
+
+      {/* Scores — right (rendered by ScoreBoard which sits in the same bar) */}
       <ScoreBoard gameState={gameState} mySocketId={mySocketId} />
 
       {/* Error toast */}
