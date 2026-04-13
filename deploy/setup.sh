@@ -21,14 +21,9 @@ sudo apt-get update -y
 sudo apt-get upgrade -y
 
 # ─── 2. Install Node.js 20 via nvm ────────────────────────────────────────────
-echo "[2/8] Installing Node.js 20 via nvm..."
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-export NVM_DIR="$HOME/.nvm"
-# shellcheck source=/dev/null
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-nvm install 20
-nvm use 20
-nvm alias default 20
+echo "[2/8] Installing Node.js 20 via NodeSource apt repo..."
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
 echo "Node version: $(node -v)"
 echo "npm version:  $(npm -v)"
 
@@ -74,14 +69,20 @@ cd "$APP_DIR/server"
 pm2 delete spades-server 2>/dev/null || true
 pm2 start index.js --name spades-server
 pm2 save
-pm2 startup | tail -1 | sudo bash || true
+sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu || true
 
 # ─── Done ─────────────────────────────────────────────────────────────────────
 echo ""
 echo "========================================="
 echo " Setup complete!"
 echo "========================================="
-PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "unknown")
+TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" 2>/dev/null)
+PUBLIC_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null)
+# Fallback: ask an external service if metadata is unavailable
+[ -z "$PUBLIC_IP" ] && PUBLIC_IP=$(curl -s https://checkip.amazonaws.com 2>/dev/null)
+[ -z "$PUBLIC_IP" ] && PUBLIC_IP="unknown"
 echo " Public IP : http://$PUBLIC_IP"
 echo " PM2 status: pm2 status"
 echo " Node logs : pm2 logs spades-server"

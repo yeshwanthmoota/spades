@@ -3,86 +3,101 @@ import PlayerHand from './PlayerHand';
 import TrickArea from './TrickArea';
 import BidPanel from './BidPanel';
 import ScoreBoard from './ScoreBoard';
-import { cardImageUrl, suitSymbol } from '../utils/gameRules';
+import { cardImageUrl } from '../utils/gameRules';
 
 /**
  * Arrange players around the table relative to "me" (always bottom).
- * Returns array of { player, position } where position is:
- *   'bottom' | 'top' | 'left' | 'right' | 'top-left' | 'top-right'
  */
 function arrangeSeats(players, mySocketId) {
   const myIndex = players.findIndex(p => p.socketId === mySocketId);
   if (myIndex === -1) return players.map((p, i) => ({ player: p, position: i === 0 ? 'bottom' : 'top' }));
 
-  // Rotate so "me" is first
   const rotated = [];
   for (let i = 0; i < players.length; i++) {
     rotated.push(players[(myIndex + i) % players.length]);
   }
 
   const n = rotated.length;
+  const positions2 = ['bottom', 'top'];
+  const positions3 = ['bottom', 'top-left', 'top-right'];
   const positions4 = ['bottom', 'left', 'top', 'right'];
   const positions5 = ['bottom', 'left', 'top-left', 'top-right', 'right'];
   const positions6 = ['bottom', 'left', 'top-left', 'top', 'top-right', 'right'];
-
-  const posMap = n === 4 ? positions4 : n === 5 ? positions5 : positions6;
+  const posMap = n === 2 ? positions2 : n === 3 ? positions3 : n === 4 ? positions4 : n === 5 ? positions5 : positions6;
 
   return rotated.map((player, i) => ({ player, position: posMap[i] }));
 }
 
+// Initials avatar fallback
+function Avatar({ name, isActive, size = 'md' }) {
+  const initials = name?.slice(0, 2).toUpperCase() ?? '??';
+  const sz = size === 'sm' ? 'w-9 h-9 text-xs' : 'w-11 h-11 text-sm';
+  return (
+    <div className={`
+      ${sz} rounded-full flex items-center justify-center font-bold
+      bg-felt-center border-2 select-none shrink-0
+      ${isActive ? 'active-ring border-blue-400' : 'border-gray-600'}
+    `}>
+      {initials}
+    </div>
+  );
+}
+
+
 function OpponentSlot({ player, isActive, currentTrickCard }) {
   const handCount = player.hand?.length ?? 0;
+
   return (
-    <div className={`flex flex-col items-center gap-1 ${isActive ? 'ring-2 ring-yellow-400 rounded-xl p-1' : 'p-1'}`}>
-      {/* Face-down cards fan */}
-      <div className="flex relative h-12 mb-1">
+    <div className="flex flex-col items-center gap-1 min-w-[72px]">
+      {/* Avatar with active ring */}
+      <Avatar name={player.name} isActive={isActive} />
+
+      {/* Name + bid progress */}
+      <p className={`text-xs font-semibold truncate max-w-[80px] text-center leading-tight
+        ${isActive ? 'text-blue-300' : 'text-gray-300'}`}>
+        {player.name}
+      </p>
+      <p className={`text-xs font-mono ${isActive ? 'text-yellow-300' : 'text-gray-500'}`}>
+        {player.bid !== null && player.bid !== undefined
+          ? `${player.tricksWon}/${player.bid}`
+          : '—'}
+      </p>
+
+      {/* Face-down card fan */}
+      <div className="relative flex h-10 mt-1" style={{ width: `${Math.min(handCount, 5) * 10 + 18}px` }}>
         {Array.from({ length: Math.min(handCount, 5) }).map((_, i) => (
           <img
             key={i}
             src="https://deckofcardsapi.com/static/img/back.png"
             alt="card back"
-            className="w-7 h-auto rounded-sm card-shadow absolute"
+            className="w-7 h-auto rounded card-shadow absolute"
             style={{ left: `${i * 10}px`, zIndex: i }}
           />
         ))}
-        {handCount > 5 && (
-          <span className="absolute text-xs text-gray-300 bottom-0" style={{ left: `${5 * 10 + 4}px` }}>
-            +{handCount - 5}
-          </span>
-        )}
       </div>
+      {handCount > 5 && (
+        <span className="text-xs text-gray-500 -mt-1">{handCount} cards</span>
+      )}
 
       {/* Card played in current trick */}
       {currentTrickCard && (
         <img
           src={cardImageUrl(currentTrickCard)}
           alt={`${currentTrickCard.rank} of ${currentTrickCard.suit}`}
-          className="w-10 h-auto rounded card-shadow mb-1"
+          className="w-10 h-auto rounded card-shadow mt-1 ring-1 ring-white/30"
         />
       )}
-
-      {/* Name + bid info */}
-      <div className="text-center">
-        <p className={`text-xs font-semibold truncate max-w-[80px] ${isActive ? 'text-yellow-300' : 'text-gray-300'}`}>
-          {player.name}
-        </p>
-        <p className="text-xs text-gray-500">
-          {player.bid !== null && player.bid !== undefined
-            ? `${player.tricksWon}/${player.bid}`
-            : '—'}
-        </p>
-      </div>
     </div>
   );
 }
 
 const POSITION_CLASSES = {
-  top: 'absolute top-2 left-1/2 -translate-x-1/2',
-  'top-left': 'absolute top-2 left-[20%]',
-  'top-right': 'absolute top-2 right-[20%]',
-  left: 'absolute left-2 top-1/2 -translate-y-1/2',
-  right: 'absolute right-2 top-1/2 -translate-y-1/2',
-  bottom: '', // handled separately
+  top:         'absolute top-3 left-1/2 -translate-x-1/2',
+  'top-left':  'absolute top-3 left-[18%]',
+  'top-right': 'absolute top-3 right-[18%]',
+  left:        'absolute left-3 top-1/2 -translate-y-1/2',
+  right:       'absolute right-3 top-1/2 -translate-y-1/2',
+  bottom:      '',
 };
 
 export default function GameTable({ gameState, mySocketId, roomCode, onSubmitBid, onPlayCard, errorMsg, onClearError }) {
@@ -92,9 +107,9 @@ export default function GameTable({ gameState, mySocketId, roomCode, onSubmitBid
 
   const me = players.find(p => p.socketId === mySocketId);
   const isMyTurn = currentTurn === mySocketId;
+  const activeName = players.find(p => p.socketId === currentTurn)?.name ?? '';
   const seats = arrangeSeats(players, mySocketId);
 
-  // Map playerId -> card played in current trick
   const trickCardByPlayer = {};
   if (currentTrick) {
     for (const { playerId, card } of currentTrick) {
@@ -141,12 +156,25 @@ export default function GameTable({ gameState, mySocketId, roomCode, onSubmitBid
         />
       )}
 
-      {/* Table area */}
+      {/* Table */}
       <div className="flex-1 relative overflow-hidden">
-        {/* Green felt table */}
-        <div className="absolute inset-4 rounded-[3rem] bg-felt border-4 border-felt-dark shadow-inner flex items-center justify-center">
-          {/* Trick area center */}
-          <div className="w-64 h-48">
+        {/* Navy felt table */}
+        <div className="absolute inset-4 rounded-[3rem] bg-felt border-2 border-white/5 shadow-inner flex flex-col items-center justify-center gap-2">
+
+          {/* ── Turn indicator banner ── */}
+          {status === 'playing' && (
+            <div className={`
+              px-4 py-1.5 rounded-full text-sm font-semibold border
+              ${isMyTurn
+                ? 'bg-blue-600/80 border-blue-400 text-white animate-pulse'
+                : 'bg-felt-center/80 border-white/10 text-gray-300'}
+            `}>
+              {isMyTurn ? '⭐ Your turn' : `${activeName}'s turn`}
+            </div>
+          )}
+
+          {/* Trick area */}
+          <div className="w-64 h-44">
             <TrickArea
               currentTrick={currentTrick}
               players={players}
@@ -169,18 +197,23 @@ export default function GameTable({ gameState, mySocketId, roomCode, onSubmitBid
           ))}
       </div>
 
-      {/* My seat — always at the bottom */}
+      {/* My seat — bottom */}
       {me && (
-        <div className={`pb-2 pt-1 flex flex-col items-center ${isMyTurn ? 'bg-yellow-900/20' : ''}`}>
+        <div className={`pb-2 pt-1 flex flex-col items-center transition-colors ${isMyTurn ? 'bg-blue-900/20' : ''}`}>
           {/* My info bar */}
-          <div className="flex items-center gap-4 mb-2 text-sm">
-            <span className={`font-semibold ${isMyTurn ? 'text-yellow-300' : 'text-gray-300'}`}>
-              {me.name} {isMyTurn && '← YOUR TURN'}
-            </span>
-            {me.bid !== null && me.bid !== undefined && (
-              <span className="text-gray-400">{me.tricksWon}/{me.bid} tricks</span>
-            )}
-            <span className="text-gray-500 text-xs">Score: {me.score}</span>
+          <div className="flex items-center gap-3 mb-2">
+            <Avatar name={me.name} isActive={isMyTurn} size="sm" />
+            <div>
+              <p className={`text-sm font-semibold leading-tight ${isMyTurn ? 'text-blue-300' : 'text-gray-300'}`}>
+                {me.name}
+                {isMyTurn && <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">YOUR TURN</span>}
+              </p>
+              <p className="text-xs text-gray-500">
+                {me.bid !== null && me.bid !== undefined
+                  ? `${me.tricksWon}/${me.bid} tricks · ${me.score} pts`
+                  : `${me.score} pts`}
+              </p>
+            </div>
           </div>
 
           {status === 'playing' && me.hand && (

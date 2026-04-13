@@ -13,7 +13,7 @@ export default function BidPanel({ gameState, mySocketId, roomCode, onSubmitBid 
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="bg-felt rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+      <div className="bg-felt rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-white/5">
         <h2 className="text-2xl font-bold mb-1 text-center">Bidding</h2>
         <p className="text-gray-400 text-sm text-center mb-5">
           Minimum bid: 1. You have {handSize} cards.

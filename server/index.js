@@ -195,8 +195,8 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: 'Only the host can start the game' });
       return;
     }
-    if (room.players.length < 4) {
-      socket.emit('error', { message: 'Need at least 4 players to start' });
+    if (room.players.length < 2) {
+      socket.emit('error', { message: 'Need at least 2 players to start' });
       return;
     }
     if (room.status !== 'lobby') {

@@ -29,14 +29,14 @@ export default function Lobby({ roomCode, gameState, mySocketId, onCreateRoom, o
       <div className="flex flex-col items-center justify-center min-h-screen gap-6 p-4">
         <h1 className="text-4xl font-bold tracking-widest">♠ SPADES</h1>
 
-        <div className="bg-felt rounded-2xl p-6 w-full max-w-md shadow-xl">
+        <div className="bg-felt rounded-2xl p-6 w-full max-w-md shadow-xl border border-white/5">
           <div className="flex items-center justify-between mb-4">
             <span className="text-gray-300 text-sm">Room Code</span>
             <span className="text-3xl font-mono font-bold tracking-widest text-yellow-300">{roomCode}</span>
           </div>
 
           <p className="text-gray-300 text-sm mb-4">
-            Share this code with friends. Need 4–6 players.
+            Share this code with friends. Need 2–6 players.
           </p>
 
           <div className="space-y-2 mb-6">
@@ -60,10 +60,10 @@ export default function Lobby({ roomCode, gameState, mySocketId, onCreateRoom, o
           {isHost ? (
             <button
               onClick={() => onStartGame(roomCode)}
-              disabled={playerCount < 4}
+              disabled={playerCount < 2}
               className="w-full py-3 rounded-xl font-bold text-lg bg-yellow-400 text-black hover:bg-yellow-300 disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
-              {playerCount < 4 ? `Waiting for players (${playerCount}/4 min)` : 'Start Game'}
+              {playerCount < 2 ? `Waiting for players (${playerCount}/2 min)` : 'Start Game'}
             </button>
           ) : (
             <p className="text-center text-gray-400">Waiting for host to start…</p>
@@ -79,7 +79,7 @@ export default function Lobby({ roomCode, gameState, mySocketId, onCreateRoom, o
       <div className="text-center">
         <h1 className="text-6xl font-bold mb-2">♠</h1>
         <h2 className="text-4xl font-bold tracking-widest">SPADES</h2>
-        <p className="text-gray-400 mt-1">4–6 players · Classic rules</p>
+        <p className="text-gray-400 mt-1">2–6 players · Classic rules</p>
       </div>
 
       {view === 'home' && (
