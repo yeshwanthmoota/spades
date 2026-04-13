@@ -5,11 +5,16 @@ const path = require('path');
 
 const {
   dealCards,
+  dealExactCards,
   validatePlay,
   determineTrickWinner,
   calculateScore,
+  calculateGullyScore,
+  getGullyCardsForRound,
+  getGullyTotalRounds,
   botBid,
   botPlayCard,
+  botGullyBid,
 } = require('./gameLogic');
 const {
   createRoom,
@@ -101,9 +106,13 @@ function wipeCredentials(room) {
 }
 
 function resolveHand(room) {
-  let gameOver = false;
+  const isGully = room.gameMode === 'gully';
+
+  // Score this round
   for (const player of room.players) {
-    const earned = calculateScore(player.bid, player.tricksWon);
+    const earned = isGully
+      ? calculateGullyScore(player.bid, player.tricksWon)
+      : calculateScore(player.bid, player.tricksWon);
     player.score += earned;
     console.log(`[${room.code}] ${player.name}: bid=${player.bid} won=${player.tricksWon} earned=${earned} total=${player.score}`);
   }
@@ -113,24 +122,48 @@ function resolveHand(room) {
   );
 
   const maxScore = Math.max(...room.players.map(p => p.score));
-  if (maxScore >= room.targetScore) {
-    const leaders = room.players.filter(p => p.score === maxScore);
-    if (leaders.length === 1) {
+  const totalRounds = isGully ? getGullyTotalRounds(room.players.length) : Infinity;
+
+  // Check game-over conditions
+  let gameOver = false;
+
+  if (isGully) {
+    const allRoundsDone = room.roundNumber >= totalRounds;
+    const targetHit = room.targetScore !== null && maxScore >= room.targetScore;
+    if (allRoundsDone || targetHit) {
+      const leaders = room.players.filter(p => p.score === maxScore);
       room.status = 'finished';
       room.winner = leaders[0].name;
       room.rematchVotes = [];
       gameOver = true;
-      wipeCredentials(room); // session ends — wipe all passwords
-      console.log(`[${room.code}] Game over! Winner: ${room.winner}`);
-    } else {
-      console.log(`[${room.code}] Tie — playing another round`);
+      wipeCredentials(room);
+      console.log(`[${room.code}] Gully game over! Winner: ${room.winner} (round ${room.roundNumber}/${totalRounds})`);
+    }
+  } else {
+    if (room.targetScore !== null && maxScore >= room.targetScore) {
+      const leaders = room.players.filter(p => p.score === maxScore);
+      if (leaders.length === 1) {
+        room.status = 'finished';
+        room.winner = leaders[0].name;
+        room.rematchVotes = [];
+        gameOver = true;
+        wipeCredentials(room);
+        console.log(`[${room.code}] Game over! Winner: ${room.winner}`);
+      } else {
+        console.log(`[${room.code}] Tie — playing another round`);
+      }
     }
   }
 
   if (!gameOver) {
     room.dealerIndex = nextPlayerIndex(room, room.dealerIndex);
     room.roundNumber += 1;
-    const hands = dealCards(room.players.length);
+    let hands;
+    if (isGully) {
+      hands = dealExactCards(room.players.length, getGullyCardsForRound(room.roundNumber, room.players.length));
+    } else {
+      hands = dealCards(room.players.length);
+    }
     room.players.forEach((p, i) => { p.hand = hands[i]; p.bid = null; p.tricksWon = 0; });
     room.spadesBroken = false;
     startBiddingPhase(room);
@@ -160,7 +193,14 @@ function scheduleBot(room) {
     if (!player || !player.disconnected || room.currentTurn !== player.socketId) return;
 
     if (room.status === 'bidding') {
-      player.bid = botBid(player.hand);
+      let bid;
+      if (room.gameMode === 'gully') {
+        const submittedBids = room.players.filter(p => p.bid !== null).map(p => p.bid);
+        bid = botGullyBid(player.hand, submittedBids, room.players.length);
+      } else {
+        bid = botBid(player.hand);
+      }
+      player.bid = bid;
       console.log(`[bot] ${name} bids ${player.bid}`);
       if (allBidsSubmitted(room)) startPlayingPhase(room);
       else { advanceTurn(room); broadcast(room); }
@@ -202,12 +242,12 @@ io.on('connection', (socket) => {
   console.log(`[connect] ${socket.id}`);
 
   // ── create_room ────────────────────────────────────────────────────────────
-  socket.on('create_room', ({ name, password }) => {
+  socket.on('create_room', ({ name, password, gameMode }) => {
     console.log(`[create_room] socket=${socket.id} name=${name}`);
     if (!name?.trim()) { socket.emit('error', { message: 'Name is required' }); return; }
     if (!password?.trim()) { socket.emit('error', { message: 'Password is required' }); return; }
 
-    const { code, room } = createRoom(socket.id, name.trim());
+    const { code, room } = createRoom(socket.id, name.trim(), gameMode || 'traditional');
     room.credentials[name.trim()] = password.trim();
     socket.join(code);
     socket.emit('room_created', { code });
@@ -274,10 +314,13 @@ io.on('connection', (socket) => {
     if (!room || room.status !== 'lobby') return;
     const player = room.players.find(p => p.socketId === socket.id);
     if (!player?.isHost) { socket.emit('error', { message: 'Only the host can set the target score' }); return; }
-    if (![100, 200].includes(Number(targetScore))) { socket.emit('error', { message: 'Target score must be 100 or 200' }); return; }
-    room.targetScore = Number(targetScore);
+    const parsed = (targetScore === null || targetScore === 0) ? null : Number(targetScore);
+    if (parsed !== null && ![100, 200].includes(parsed)) {
+      socket.emit('error', { message: 'Target score must be 100, 200, or none' }); return;
+    }
+    room.targetScore = parsed;
     broadcastLobby(room);
-    console.log(`[set_target_score] Room ${code} target set to ${targetScore}`);
+    console.log(`[set_target_score] Room ${code} target set to ${parsed}`);
   });
 
   // ── start_game ─────────────────────────────────────────────────────────────
@@ -290,12 +333,17 @@ io.on('connection', (socket) => {
     if (room.players.length < 2) { socket.emit('error', { message: 'Need at least 2 players to start' }); return; }
     if (room.status !== 'lobby') { socket.emit('error', { message: 'Game already started' }); return; }
 
-    const hands = dealCards(room.players.length);
-    room.players.forEach((p, i) => { p.hand = hands[i]; });
     room.roundNumber = 1;
     room.spadesBroken = false;
+    let hands;
+    if (room.gameMode === 'gully') {
+      hands = dealExactCards(room.players.length, getGullyCardsForRound(1, room.players.length));
+    } else {
+      hands = dealCards(room.players.length);
+    }
+    room.players.forEach((p, i) => { p.hand = hands[i]; });
     startBiddingPhase(room);
-    console.log(`[start_game] Game started in room ${code} (target: ${room.targetScore})`);
+    console.log(`[start_game] Game started in room ${code} (mode: ${room.gameMode}, target: ${room.targetScore})`);
   });
 
   // ── submit_bid ─────────────────────────────────────────────────────────────
@@ -308,6 +356,15 @@ io.on('connection', (socket) => {
 
     const bidNum = parseInt(bid, 10);
     if (isNaN(bidNum) || bidNum < 0) { socket.emit('error', { message: 'Invalid bid' }); return; }
+
+    if (room.gameMode === 'gully') {
+      const submittedBids = room.players.filter(p => p.bid !== null).map(p => p.bid);
+      const runningSum = submittedBids.reduce((a, b) => a + b, 0) + bidNum;
+      if (runningSum % room.players.length === 0) {
+        socket.emit('error', { message: `Bid ${bidNum} makes the total divisible by ${room.players.length} — choose another` });
+        return;
+      }
+    }
 
     const player = room.players.find(p => p.socketId === socket.id);
     player.bid = bidNum;
@@ -392,7 +449,12 @@ io.on('connection', (socket) => {
     room.rematchVotes = [];
     room.botTimers = {};
 
-    const hands = dealCards(room.players.length);
+    let hands;
+    if (room.gameMode === 'gully') {
+      hands = dealExactCards(room.players.length, getGullyCardsForRound(1, room.players.length));
+    } else {
+      hands = dealCards(room.players.length);
+    }
     room.players.forEach((p, i) => { p.hand = hands[i]; });
     startBiddingPhase(room);
     console.log(`[start_rematch] Rematch started in room ${code}`);

@@ -177,15 +177,53 @@ function botPlayCard(hand, leadSuit, spadesBroken) {
   return sorted[0];
 }
 
+function dealExactCards(numPlayers, cardsPerPlayer) {
+  const deck = createDeck();
+  const hands = [];
+  for (let i = 0; i < numPlayers; i++) {
+    hands.push(deck.slice(i * cardsPerPlayer, (i + 1) * cardsPerPlayer));
+  }
+  return hands;
+}
+
+function calculateGullyScore(bid, tricksWon) {
+  return bid === tricksWon ? bid * 11 + 10 : 0;
+}
+
+function getGullyCardsForRound(roundNumber, numPlayers) {
+  const maxCards = Math.floor(52 / numPlayers);
+  return roundNumber <= maxCards ? roundNumber : 2 * maxCards - roundNumber;
+}
+
+function getGullyTotalRounds(numPlayers) {
+  return 2 * Math.floor(52 / numPlayers) - 1;
+}
+
+// Bot bid for Gully: picks closest valid estimate that doesn't make running sum divisible by numPlayers
+function botGullyBid(hand, submittedBids, numPlayers) {
+  const previousSum = submittedBids.reduce((a, b) => a + b, 0);
+  const handSize = hand.length;
+  const estimate = Math.min(Math.round(botBid(hand)), handSize);
+  const valid = Array.from({length: handSize + 1}, (_, i) => i)
+    .filter(b => (previousSum + b) % numPlayers !== 0);
+  if (valid.length === 0) return estimate;
+  return valid.reduce((best, b) => Math.abs(b - estimate) < Math.abs(best - estimate) ? b : best);
+}
+
 module.exports = {
   createDeck,
   dealCards,
+  dealExactCards,
   validatePlay,
   determineTrickWinner,
   calculateScore,
+  calculateGullyScore,
+  getGullyCardsForRound,
+  getGullyTotalRounds,
   isSpadesBroken,
   botBid,
   botPlayCard,
+  botGullyBid,
   SUITS,
   RANKS,
   RANK_VALUE,

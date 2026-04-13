@@ -4,7 +4,7 @@ import TrickArea from './TrickArea';
 import BidPanel from './BidPanel';
 import ScoreBoard from './ScoreBoard';
 import RulesModal from './RulesModal';
-import { cardImageUrl } from '../utils/gameRules';
+import { cardImageUrl, getGullyCardsForRound, getGullyTotalRounds } from '../utils/gameRules';
 
 // ─── Seat layout ─────────────────────────────────────────────────────────────
 
@@ -179,7 +179,7 @@ export default function GameTable({
   const [showRules, setShowRules] = useState(false);
   if (!gameState) return null;
 
-  const { players, status, currentTurn, currentTrick, leadSuit, spadesBroken } = gameState;
+  const { players, status, currentTurn, currentTrick, leadSuit, spadesBroken, gameMode, roundNumber } = gameState;
   const me = players.find(p => p.socketId === mySocketId);
   const isMyTurn = currentTurn === mySocketId;
   const activeName = players.find(p => p.socketId === currentTurn)?.name ?? '';
@@ -237,6 +237,14 @@ export default function GameTable({
                 ? 'bg-blue-600/80 border-blue-400 text-white animate-pulse'
                 : 'bg-felt-center/80 border-white/10 text-gray-300'}`}>
               {isMyTurn ? '⭐ Your turn' : `${activeName}'s turn`}
+            </div>
+          )}
+
+          {/* Gully round indicator */}
+          {gameMode === 'gully' && status !== 'finished' && (
+            <div className="px-3 py-1 rounded-full text-xs font-semibold bg-orange-500/20 border border-orange-400/50 text-orange-300">
+              Round {roundNumber} of {getGullyTotalRounds(players.length)} · {getGullyCardsForRound(roundNumber, players.length)} card{getGullyCardsForRound(roundNumber, players.length) !== 1 ? 's' : ''}
+              {' · '}{roundNumber <= Math.floor(52 / players.length) ? '↑ ascending' : '↓ descending'}
             </div>
           )}
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getGullyTotalRounds } from '../utils/gameRules';
 
 function scoreColor(score) {
   if (score > 0)  return 'text-green-400';
@@ -7,15 +8,15 @@ function scoreColor(score) {
 }
 
 // Show the per-hand earned points with colour coding
-function handEarned(bid, tricksWon) {
+function handEarned(bid, tricksWon, isGully) {
   let pts;
-  if (bid === 0) {
+  if (isGully) {
+    pts = bid === tricksWon ? bid * 11 + 10 : 0;
+  } else if (bid === 0) {
     pts = tricksWon === 0 ? 50 : -50;
   } else {
     const base = tricksWon * 10;
-    pts = tricksWon < bid
-      ? base - (bid - tricksWon) * 10
-      : base - (tricksWon - bid) * 20;
+    pts = tricksWon < bid ? base - (bid - tricksWon) * 10 : base - (tricksWon - bid) * 20;
   }
   const color = pts > 0 ? 'text-green-400' : pts < 0 ? 'text-red-400' : 'text-gray-400';
   const sign  = pts >= 0 ? '+' : '';
@@ -27,6 +28,7 @@ export default function ScoreBoard({ gameState, mySocketId }) {
   if (!gameState) return null;
 
   const { players, targetScore, handHistory, status, winner } = gameState;
+  const isGully = gameState.gameMode === 'gully';
 
   return (
     <>
@@ -43,9 +45,17 @@ export default function ScoreBoard({ gameState, mySocketId }) {
 
             <div className="flex justify-between items-center mb-1">
               <h2 className="text-2xl font-bold">Scores</h2>
-              <span className="text-gray-400 text-sm">First to {targetScore} pts</span>
+              <span className="text-gray-400 text-sm">
+                {isGully
+                  ? (targetScore ? `First to ${targetScore} pts` : `All ${getGullyTotalRounds(players.length)} rounds`)
+                  : `First to ${targetScore} pts`}
+              </span>
             </div>
-            <p className="text-xs text-gray-500 mb-4">+10 per trick won · −10 per undertrick · −10 per bag</p>
+            <p className="text-xs text-gray-500 mb-4">
+              {isGully
+                ? 'Exact bid: (bid×11)+10 pts · Any miss: 0 pts'
+                : '+10 per trick won · −10 per undertrick · −20 per bag'}
+            </p>
 
             {/* Current totals */}
             <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 gap-y-1 mb-2 text-xs font-semibold text-gray-500 border-b border-gray-700 pb-2">
@@ -67,9 +77,11 @@ export default function ScoreBoard({ gameState, mySocketId }) {
                   {/* Deviation indicator */}
                   <span className="text-center font-mono text-xs">
                     {deviation === null ? '—'
-                      : deviation === 0
-                        ? <span className="text-green-400">✔</span>
-                        : <span className="text-red-400">−{deviation}</span>}
+                      : isGully
+                        ? (deviation === 0 ? <span className="text-green-400">✔</span> : <span className="text-red-400">✗</span>)
+                        : deviation === 0
+                          ? <span className="text-green-400">✔</span>
+                          : <span className="text-red-400">−{deviation}</span>}
                   </span>
                   <span className={`text-center font-mono font-bold ${scoreColor(p.score)}`}>
                     {p.score}
@@ -91,7 +103,7 @@ export default function ScoreBoard({ gameState, mySocketId }) {
                         <span className="flex items-center gap-1">
                           {p.bid} bid / {p.tricksWon} won
                           <span className="mx-1 text-gray-600">→</span>
-                          {handEarned(p.bid, p.tricksWon)}
+                          {handEarned(p.bid, p.tricksWon, isGully)}
                           <span className="text-gray-500 ml-1">({p.score} total)</span>
                         </span>
                       </div>

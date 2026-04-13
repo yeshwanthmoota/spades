@@ -12,7 +12,7 @@ function generateCode() {
   return code;
 }
 
-function createRoom(socketId, name) {
+function createRoom(socketId, name, gameMode = 'traditional') {
   let code;
   do { code = generateCode(); } while (rooms[code]);
 
@@ -36,7 +36,8 @@ function createRoom(socketId, name) {
     currentTrick: [],
     leadSuit: null,
     spadesBroken: false,
-    targetScore: 100,
+    gameMode: gameMode || 'traditional',
+    targetScore: gameMode === 'gully' ? null : 100,
     handHistory: [],
     trickHistory: [],
     roundNumber: 0,

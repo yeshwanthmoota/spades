@@ -60,3 +60,25 @@ export function suitSymbol(suit) {
 export function suitColor(suit) {
   return suit === 'HEARTS' || suit === 'DIAMONDS' ? 'text-red-500' : 'text-white';
 }
+
+export function getGullyCardsForRound(roundNumber, numPlayers) {
+  const maxCards = Math.floor(52 / numPlayers);
+  return roundNumber <= maxCards ? roundNumber : 2 * maxCards - roundNumber;
+}
+
+export function getGullyTotalRounds(numPlayers) {
+  return 2 * Math.floor(52 / numPlayers) - 1;
+}
+
+export function getInvalidGullyBids(submittedBids, numPlayers, handSize) {
+  const previousSum = submittedBids.reduce((a, b) => a + b, 0);
+  const invalid = [];
+  for (let b = 0; b <= handSize; b++) {
+    if ((previousSum + b) % numPlayers === 0) invalid.push(b);
+  }
+  return invalid;
+}
+
+export function calculateGullyScore(bid, tricksWon) {
+  return bid === tricksWon ? bid * 11 + 10 : 0;
+}

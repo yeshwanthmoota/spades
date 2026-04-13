@@ -30,7 +30,7 @@ export function useSocket() {
     return () => socket.disconnect();
   }, []);
 
-  const createRoom      = useCallback((name, password)        => socketRef.current?.emit('create_room',      { name, password }), []);
+  const createRoom      = useCallback((name, password, gameMode) => socketRef.current?.emit('create_room',      { name, password, gameMode }), []);
   const joinRoom        = useCallback((code, name, password)  => socketRef.current?.emit('join_room',        { code, name, password }), []);
   const startGame       = useCallback((code)                  => socketRef.current?.emit('start_game',       { code }), []);
   const submitBid       = useCallback((code, bid)             => socketRef.current?.emit('submit_bid',       { code, bid }), []);
