@@ -43,7 +43,7 @@ export default function PlayerHand({ hand, isMyTurn, leadSuit, spadesBroken, roo
               <img
                 src={cardImageUrl(card)}
                 alt={`${card.rank} of ${card.suit}`}
-                className={`w-14 h-auto rounded-md card-shadow ${isSelected ? 'ring-2 ring-yellow-400' : ''}`}
+                className={`w-10 sm:w-14 h-auto rounded-md card-shadow ${isSelected ? 'ring-2 ring-yellow-400' : ''}`}
               />
             </button>
           );

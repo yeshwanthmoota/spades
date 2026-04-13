@@ -192,6 +192,12 @@ export default function GameTable({
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-felt-dark">
+      {/* Portrait phone hint — shown only on narrow screens shorter than 600px */}
+      <div className="sm:hidden landscape:hidden fixed bottom-2 left-1/2 -translate-x-1/2 z-50
+        bg-black/80 text-gray-300 text-xs rounded-full px-4 py-1.5 pointer-events-none
+        [display:none] [@media(max-width:600px)and(orientation:portrait)]:block">
+        Rotate for best experience ↻
+      </div>
 
       {/* Rules modal */}
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
@@ -234,8 +240,8 @@ export default function GameTable({
         />
       )}
 
-      {/* Table */}
-      <div className="flex-1 relative overflow-hidden">
+      {/* Table — pt-12 offsets the fixed top bar (h-12) */}
+      <div className="flex-1 relative overflow-hidden pt-12">
         <div className="absolute inset-4 rounded-[3rem] bg-felt border-2 border-white/5 shadow-inner flex flex-col items-center justify-center gap-2">
 
           {/* Turn banner */}
