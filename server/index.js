@@ -159,17 +159,29 @@ function resolveHand(room) {
   }
 
   if (!gameOver) {
-    room.dealerIndex = nextPlayerIndex(room, room.dealerIndex);
-    room.roundNumber += 1;
-    let hands;
-    if (isGully) {
-      hands = dealExactCards(room.players.length, getGullyCardsForRound(room.roundNumber, room.players.length));
-    } else {
-      hands = dealCards(room.players.length);
-    }
-    room.players.forEach((p, i) => { p.hand = hands[i]; p.bid = null; p.tricksWon = 0; });
-    room.spadesBroken = false;
-    startBiddingPhase(room);
+    // ── 10-second pause so everyone can see the last trick and scores ─────────
+    room.status = 'round_end';
+    broadcast(room); // clients see lastTrick + updated scores + round_end status
+
+    room.roundEndTimer = setTimeout(() => {
+      room.roundEndTimer = null;
+
+      // Room may have been deleted while waiting
+      if (!require('./roomManager').rooms[room.code]) return;
+
+      room.dealerIndex = nextPlayerIndex(room, room.dealerIndex);
+      room.roundNumber += 1;
+      let hands;
+      if (isGully) {
+        hands = dealExactCards(room.players.length, getGullyCardsForRound(room.roundNumber, room.players.length));
+      } else {
+        hands = dealCards(room.players.length);
+      }
+      room.players.forEach((p, i) => { p.hand = hands[i]; p.bid = null; p.tricksWon = 0; });
+      room.spadesBroken = false;
+      room.lastTrick = [];
+      startBiddingPhase(room);
+    }, 10000); // 10 seconds
   } else {
     broadcast(room);
   }
@@ -226,6 +238,7 @@ function scheduleBot(room) {
         const winner = room.players.find(p => p.socketId === winnerId);
         winner.tricksWon += 1;
         room.trickHistory.push([...room.currentTrick]);
+        room.lastTrick = [...room.currentTrick]; // preserve for round_end display
         room.currentTrick = [];
         room.leadSuit = null;
         room.currentTurn = winnerId;
@@ -407,6 +420,7 @@ io.on('connection', (socket) => {
       const winner = room.players.find(p => p.socketId === winnerId);
       winner.tricksWon += 1;
       room.trickHistory.push([...room.currentTrick]);
+      room.lastTrick = [...room.currentTrick]; // preserve for round_end display
       room.currentTrick = [];
       room.leadSuit = null;
       room.currentTurn = winnerId;
@@ -486,6 +500,7 @@ io.on('connection', (socket) => {
         // If ALL players are now disconnected, delete the room entirely
         if (room.players.every(p => p.disconnected)) {
           Object.values(room.botTimers).forEach(t => clearTimeout(t));
+          if (room.roundEndTimer) clearTimeout(room.roundEndTimer);
           logGameAbandoned(room);
           delete require('./roomManager').rooms[room.code];
           console.log(`[disconnect] All players gone — room ${room.code} deleted`);

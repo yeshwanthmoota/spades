@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PlayerHand from './PlayerHand';
 import TrickArea from './TrickArea';
 import BidPanel from './BidPanel';
@@ -179,9 +179,22 @@ export default function GameTable({
   errorMsg, onClearError,
 }) {
   const [showRules, setShowRules] = useState(false);
+  const [countdown, setCountdown] = useState(0);
   if (!gameState) return null;
 
   const { players, status, currentTurn, currentTrick, leadSuit, spadesBroken, gameMode, roundNumber } = gameState;
+  const isRoundEnd = status === 'round_end';
+
+  // Countdown timer shown during round_end pause
+  useEffect(() => {
+    if (!isRoundEnd) { setCountdown(0); return; }
+    setCountdown(10);
+    const interval = setInterval(() => setCountdown(c => {
+      if (c <= 1) { clearInterval(interval); return 0; }
+      return c - 1;
+    }), 1000);
+    return () => clearInterval(interval);
+  }, [isRoundEnd, roundNumber]);
   const me = players.find(p => p.socketId === mySocketId);
   const isMyTurn = currentTurn === mySocketId;
   const activeName = players.find(p => p.socketId === currentTurn)?.name ?? '';
@@ -262,9 +275,20 @@ export default function GameTable({
             </div>
           )}
 
-          {/* Trick area */}
+          {/* Round-end countdown banner */}
+          {isRoundEnd && (
+            <div className="px-5 py-2 rounded-full text-sm font-semibold bg-green-700/60 border border-green-400/50 text-green-200">
+              Round complete! Next round in {countdown}s…
+            </div>
+          )}
+
+          {/* Trick area — show lastTrick during round_end so cards stay visible */}
           <div className="w-64 h-44">
-            <TrickArea currentTrick={currentTrick} players={players} spadesBroken={spadesBroken} />
+            <TrickArea
+              currentTrick={isRoundEnd ? (gameState.lastTrick ?? []) : currentTrick}
+              players={players}
+              spadesBroken={spadesBroken}
+            />
           </div>
         </div>
 
@@ -302,6 +326,10 @@ export default function GameTable({
 
           {status === 'bidding' && (
             <BidPanel gameState={gameState} mySocketId={mySocketId} roomCode={roomCode} onSubmitBid={onSubmitBid} />
+          )}
+
+          {isRoundEnd && (
+            <p className="text-gray-500 text-sm pb-2">Scores updated — next round starting shortly…</p>
           )}
 
           {status === 'playing' && me.hand && (
