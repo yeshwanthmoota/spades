@@ -25,6 +25,7 @@ const {
   clearSocketMapping,
   updateSocketId,
 } = require('./roomManager');
+const { logGameStart, logGameEnd, logGameAbandoned } = require('./logger');
 
 const app = express();
 const server = http.createServer(app);
@@ -138,6 +139,7 @@ function resolveHand(room) {
       gameOver = true;
       wipeCredentials(room);
       console.log(`[${room.code}] Gully game over! Winner: ${room.winner} (round ${room.roundNumber}/${totalRounds})`);
+      logGameEnd(room);
     }
   } else {
     if (room.targetScore !== null && maxScore >= room.targetScore) {
@@ -149,6 +151,7 @@ function resolveHand(room) {
         gameOver = true;
         wipeCredentials(room);
         console.log(`[${room.code}] Game over! Winner: ${room.winner}`);
+        logGameEnd(room);
       } else {
         console.log(`[${room.code}] Tie — playing another round`);
       }
@@ -344,6 +347,7 @@ io.on('connection', (socket) => {
     room.players.forEach((p, i) => { p.hand = hands[i]; });
     startBiddingPhase(room);
     console.log(`[start_game] Game started in room ${code} (mode: ${room.gameMode}, target: ${room.targetScore})`);
+    logGameStart(room);
   });
 
   // ── submit_bid ─────────────────────────────────────────────────────────────
@@ -462,6 +466,7 @@ io.on('connection', (socket) => {
     room.players.forEach((p, i) => { p.hand = hands[i]; });
     startBiddingPhase(room);
     console.log(`[start_rematch] Rematch started in room ${code}`);
+    logGameStart(room);
   });
 
   // ── disconnect ─────────────────────────────────────────────────────────────
@@ -481,6 +486,7 @@ io.on('connection', (socket) => {
         // If ALL players are now disconnected, delete the room entirely
         if (room.players.every(p => p.disconnected)) {
           Object.values(room.botTimers).forEach(t => clearTimeout(t));
+          logGameAbandoned(room);
           delete require('./roomManager').rooms[room.code];
           console.log(`[disconnect] All players gone — room ${room.code} deleted`);
           return;

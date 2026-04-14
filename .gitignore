@@ -20,6 +20,7 @@ server/public/
 # Logs
 *.log
 npm-debug.log*
+server/logs/
 
 # OS
 .DS_Store
