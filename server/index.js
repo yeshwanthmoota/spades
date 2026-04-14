@@ -39,8 +39,8 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 
 /** Strip internal fields (credentials, timers) and opponent hands from the view */
 function roomView(room, requestingSocketId) {
-  // roundEndTimer is a Node.js Timeout object — not JSON-serialisable, must exclude
-  const { credentials, botTimers, roundEndTimer, ...roomData } = room;
+  // trickTimer is a Node.js Timeout object — not JSON-serialisable, must exclude
+  const { credentials, botTimers, trickTimer, ...roomData } = room;
   return {
     ...roomData,
     players: room.players.map(p => ({
@@ -107,11 +107,11 @@ function wipeCredentials(room) {
   console.log(`[${room.code}] Credentials wiped`);
 }
 
+// Called after the 10-second trick_complete pause when the hand is over.
+// Scores the round and immediately starts the next one (no extra delay).
 function resolveHand(room) {
-  console.log(`[DIAG] resolveHand entered. currentTrick length=${room.currentTrick.length}:`, JSON.stringify(room.currentTrick.map(e => `${e.card.rank}${e.card.suit}`)));
   const isGully = room.gameMode === 'gully';
 
-  // Score this round
   for (const player of room.players) {
     const earned = isGully
       ? calculateGullyScore(player.bid, player.tricksWon)
@@ -124,19 +124,17 @@ function resolveHand(room) {
     room.players.map(p => ({ name: p.name, bid: p.bid, tricksWon: p.tricksWon, score: p.score }))
   );
 
-  const maxScore = Math.max(...room.players.map(p => p.score));
+  const maxScore   = Math.max(...room.players.map(p => p.score));
   const totalRounds = isGully ? getGullyTotalRounds(room.players.length) : Infinity;
-
-  // Check game-over conditions
   let gameOver = false;
 
   if (isGully) {
     const allRoundsDone = room.roundNumber >= totalRounds;
-    const targetHit = room.targetScore !== null && maxScore >= room.targetScore;
+    const targetHit     = room.targetScore !== null && maxScore >= room.targetScore;
     if (allRoundsDone || targetHit) {
       const leaders = room.players.filter(p => p.score === maxScore);
       room.status = 'finished';
-      room.winner = leaders[0].name;
+      room.winner  = leaders[0].name;
       room.rematchVotes = [];
       gameOver = true;
       wipeCredentials(room);
@@ -148,7 +146,7 @@ function resolveHand(room) {
       const leaders = room.players.filter(p => p.score === maxScore);
       if (leaders.length === 1) {
         room.status = 'finished';
-        room.winner = leaders[0].name;
+        room.winner  = leaders[0].name;
         room.rematchVotes = [];
         gameOver = true;
         wipeCredentials(room);
@@ -161,33 +159,53 @@ function resolveHand(room) {
   }
 
   if (!gameOver) {
-    room.status = 'round_end';
-    console.log(`[DIAG] About to broadcast round_end. currentTrick length=${room.currentTrick.length}:`, JSON.stringify(room.currentTrick.map(e => `${e.card.rank}${e.card.suit}`)));
-    broadcast(room);
-
-    room.roundEndTimer = setTimeout(() => {
-      room.roundEndTimer = null;
-      if (!require('./roomManager').rooms[room.code]) return; // room deleted
-
-      // Now clear the table and start the next round
-      room.currentTrick = [];
-      room.leadSuit = null;
-      room.dealerIndex = nextPlayerIndex(room, room.dealerIndex);
-      room.roundNumber += 1;
-      let hands;
-      if (isGully) {
-        hands = dealExactCards(room.players.length, getGullyCardsForRound(room.roundNumber, room.players.length));
-      } else {
-        hands = dealCards(room.players.length);
-      }
-      room.players.forEach((p, i) => { p.hand = hands[i]; p.bid = null; p.tricksWon = 0; });
-      room.spadesBroken = false;
-      room.lastTrick = [];
-      startBiddingPhase(room);
-    }, 10000);
+    // Immediately start next round — the 10-second pause was already served by completeTrick
+    room.dealerIndex = nextPlayerIndex(room, room.dealerIndex);
+    room.roundNumber += 1;
+    const hands = isGully
+      ? dealExactCards(room.players.length, getGullyCardsForRound(room.roundNumber, room.players.length))
+      : dealCards(room.players.length);
+    room.players.forEach((p, i) => { p.hand = hands[i]; p.bid = null; p.tricksWon = 0; });
+    room.spadesBroken = false;
+    startBiddingPhase(room);
   } else {
     broadcast(room);
   }
+}
+
+// ─── Unified trick completion ─────────────────────────────────────────────────
+// Called whenever all N players have played. Sets trick_complete, broadcasts the
+// full trick, then after 10 s resolves the trick (and optionally the hand).
+function completeTrick(room) {
+  const isLastTrick = checkHandComplete(room); // hands already stripped of played card
+  const winnerId    = determineTrickWinner(room.currentTrick);
+
+  // Set status and broadcast — currentTrick still has all N cards
+  room.status = 'trick_complete';
+  broadcast(room);
+
+  // Cancel any stale timer (safety)
+  if (room.trickTimer) clearTimeout(room.trickTimer);
+
+  room.trickTimer = setTimeout(() => {
+    room.trickTimer = null;
+    if (!require('./roomManager').rooms[room.code]) return; // room was deleted
+
+    // Now resolve the trick
+    const winner = room.players.find(p => p.socketId === winnerId);
+    if (winner) winner.tricksWon += 1;
+    room.trickHistory.push([...room.currentTrick]);
+    room.currentTrick = [];
+    room.leadSuit     = null;
+    room.currentTurn  = winnerId;
+    room.status       = 'playing';
+
+    if (isLastTrick) {
+      resolveHand(room); // score + deal next round immediately
+    } else {
+      broadcast(room);   // next trick begins
+    }
+  }, 10000);
 }
 
 // ─── Bot scheduling ───────────────────────────────────────────────────────────
@@ -237,20 +255,7 @@ function scheduleBot(room) {
       console.log(`[bot] ${name} plays ${card.rank} of ${card.suit}`);
 
       if (room.currentTrick.length === room.players.length) {
-        const winnerId = determineTrickWinner(room.currentTrick);
-        const winner = room.players.find(p => p.socketId === winnerId);
-        winner.tricksWon += 1;
-        room.trickHistory.push([...room.currentTrick]);
-        room.lastTrick = [...room.currentTrick]; // preserve for round_end display
-        room.currentTurn = winnerId;
-
-        if (checkHandComplete(room)) {
-          resolveHand(room);
-        } else {
-          room.currentTrick = [];
-          room.leadSuit = null;
-          broadcast(room);
-        }
+        completeTrick(room);
       } else {
         advanceTurn(room);
         broadcast(room);
@@ -423,25 +428,7 @@ io.on('connection', (socket) => {
     console.log(`[play_card] ${player.name} played ${card.rank} of ${card.suit}`);
 
     if (room.currentTrick.length === room.players.length) {
-      const winnerId = determineTrickWinner(room.currentTrick);
-      const winner = room.players.find(p => p.socketId === winnerId);
-      winner.tricksWon += 1;
-      room.trickHistory.push([...room.currentTrick]);
-      room.lastTrick = [...room.currentTrick]; // preserve for round_end display
-      room.currentTurn = winnerId;
-
-      console.log(`[DIAG] Trick complete. currentTrick has ${room.currentTrick.length} cards:`, JSON.stringify(room.currentTrick.map(e => `${e.card.rank}${e.card.suit}`)));
-      console.log(`[DIAG] checkHandComplete=${checkHandComplete(room)}`);
-
-      if (checkHandComplete(room)) {
-        console.log(`[DIAG] Hand complete — calling resolveHand. currentTrick length=${room.currentTrick.length}`);
-        resolveHand(room);
-      } else {
-        room.currentTrick = [];
-        room.leadSuit = null;
-        console.log(`[DIAG] Mid-round trick done — broadcasting. currentTrick cleared.`);
-        broadcast(room);
-      }
+      completeTrick(room);
     } else {
       advanceTurn(room);
       broadcast(room);
@@ -516,7 +503,7 @@ io.on('connection', (socket) => {
         // If ALL players are now disconnected, delete the room entirely
         if (room.players.every(p => p.disconnected)) {
           Object.values(room.botTimers).forEach(t => clearTimeout(t));
-          if (room.roundEndTimer) clearTimeout(room.roundEndTimer);
+          if (room.trickTimer) clearTimeout(room.trickTimer);
           logGameAbandoned(room);
           delete require('./roomManager').rooms[room.code];
           console.log(`[disconnect] All players gone — room ${room.code} deleted`);

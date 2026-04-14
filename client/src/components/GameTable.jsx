@@ -183,18 +183,21 @@ export default function GameTable({
   if (!gameState) return null;
 
   const { players, status, currentTurn, currentTrick, leadSuit, spadesBroken, gameMode, roundNumber } = gameState;
-  const isRoundEnd = status === 'round_end';
+  const isTrickComplete = status === 'trick_complete';
 
-  // Countdown timer shown during round_end pause
+  // True when all hands are empty → this is the last trick of the round
+  const isLastTrick = isTrickComplete && players.every(p => (p.hand?.length ?? 0) === 0);
+
+  // Countdown: reset to 10 every time trick_complete fires (status flips false→true each trick)
   useEffect(() => {
-    if (!isRoundEnd) { setCountdown(0); return; }
+    if (!isTrickComplete) { setCountdown(0); return; }
     setCountdown(10);
     const interval = setInterval(() => setCountdown(c => {
       if (c <= 1) { clearInterval(interval); return 0; }
       return c - 1;
     }), 1000);
     return () => clearInterval(interval);
-  }, [isRoundEnd, roundNumber]);
+  }, [isTrickComplete, roundNumber]);
   const me = players.find(p => p.socketId === mySocketId);
   const isMyTurn = currentTurn === mySocketId;
   const activeName = players.find(p => p.socketId === currentTurn)?.name ?? '';
@@ -225,10 +228,15 @@ export default function GameTable({
         ♠ Rules
       </button>
 
-      {/* Room code — centre */}
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 h-12 z-40 flex items-center gap-2 px-4 pointer-events-none">
+      {/* Room code + countdown — centre */}
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 h-12 z-40 flex items-center gap-3 px-4 pointer-events-none">
         <span className="text-gray-500 text-xs tracking-wide">ROOM</span>
         <span className="font-mono font-bold text-yellow-300 tracking-widest text-sm">{roomCode}</span>
+        {isTrickComplete && countdown > 0 && (
+          <span className="font-semibold text-sm text-orange-200 bg-orange-500/25 border border-orange-400/50 rounded-full px-3 py-0.5 tabular-nums">
+            {isLastTrick ? 'Next round' : 'Next trick'} in {countdown}s
+          </span>
+        )}
       </div>
 
       {/* Scores — right (rendered by ScoreBoard which sits in the same bar) */}
@@ -275,14 +283,7 @@ export default function GameTable({
             </div>
           )}
 
-          {/* Round-end countdown banner */}
-          {isRoundEnd && (
-            <div className="px-5 py-2 rounded-full text-sm font-semibold bg-green-700/60 border border-green-400/50 text-green-200">
-              Round complete! Next round in {countdown}s…
-            </div>
-          )}
-
-          {/* Trick area — currentTrick stays populated during round_end */}
+          {/* Trick area — currentTrick stays populated during trick_complete */}
           <div className="w-64 h-44">
             <TrickArea
               currentTrick={currentTrick}
@@ -326,10 +327,6 @@ export default function GameTable({
 
           {status === 'bidding' && (
             <BidPanel gameState={gameState} mySocketId={mySocketId} roomCode={roomCode} onSubmitBid={onSubmitBid} />
-          )}
-
-          {isRoundEnd && (
-            <p className="text-gray-500 text-sm pb-2">Scores updated — next round starting shortly…</p>
           )}
 
           {status === 'playing' && me.hand && (

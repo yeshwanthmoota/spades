@@ -44,8 +44,7 @@ function createRoom(socketId, name, gameMode = 'traditional') {
     rematchVotes: [],     // socketIds of players who voted to play again
     credentials: {},      // { [playerName]: password } — wiped at game end
     botTimers: {},        // { [playerName]: timeoutId } — pending bot moves
-    lastTrick: [],        // last completed trick — shown during round_end pause
-    roundEndTimer: null,  // setTimeout handle for between-round delay
+    trickTimer:  null,    // setTimeout handle for trick_complete 10-second pause
   };
 
   socketRoomMap[socketId] = code;
