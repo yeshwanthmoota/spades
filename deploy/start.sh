@@ -57,29 +57,12 @@ else
   ok "Server dependencies present"
 fi
 
-# ── 2. Rebuild React if source is newer than build ────────────────
-step "[2/5] Checking React build..."
-
-needs_build() {
-  $FORCE_BUILD && return 0
-  [ ! -d "$BUILD_DIR" ] && return 0
-  [ ! -f "$BUILD_DIR/index.html" ] && return 0
-
-  LATEST_SRC=$(find "$CLIENT_DIR/src" "$CLIENT_DIR/index.html" \
-    "$CLIENT_DIR/vite.config.js" "$CLIENT_DIR/tailwind.config.js" \
-    -newer "$BUILD_DIR/index.html" 2>/dev/null | head -1)
-
-  [ -n "$LATEST_SRC" ]
-}
-
-if needs_build; then
-  info "Building React app (this takes ~30s)..."
-  cd "$CLIENT_DIR"
-  npm run build 2>&1 | tail -5
-  ok "React build complete → server/public"
-else
-  ok "React build is up to date (use --force to rebuild)"
-fi
+# ── 2. Rebuild React (always, so deployed code is never stale) ────
+step "[2/5] Building React app..."
+info "Building React app (this takes ~30s)..."
+cd "$CLIENT_DIR"
+npm run build 2>&1 | tail -5
+ok "React build complete → server/public"
 
 # ── 3. Nginx ──────────────────────────────────────────────────────
 step "[3/5] Checking Nginx..."
