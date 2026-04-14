@@ -191,7 +191,7 @@ export default function GameTable({
   // Countdown: reset to 10 every time trick_complete fires (status flips false→true each trick)
   useEffect(() => {
     if (!isTrickComplete) { setCountdown(0); return; }
-    setCountdown(10);
+    setCountdown(5);
     const interval = setInterval(() => setCountdown(c => {
       if (c <= 1) { clearInterval(interval); return 0; }
       return c - 1;

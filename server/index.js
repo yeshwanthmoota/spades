@@ -205,7 +205,7 @@ function completeTrick(room) {
     } else {
       broadcast(room);   // next trick begins
     }
-  }, 10000);
+  }, 5000);
 }
 
 // ─── Bot scheduling ───────────────────────────────────────────────────────────
