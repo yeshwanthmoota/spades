@@ -239,11 +239,17 @@ function scheduleBot(room) {
         winner.tricksWon += 1;
         room.trickHistory.push([...room.currentTrick]);
         room.lastTrick = [...room.currentTrick]; // preserve for round_end display
-        room.currentTrick = [];
-        room.leadSuit = null;
         room.currentTurn = winnerId;
-        broadcast(room);
-        if (checkHandComplete(room)) resolveHand(room);
+
+        if (checkHandComplete(room)) {
+          room.currentTrick = [];
+          room.leadSuit = null;
+          resolveHand(room);
+        } else {
+          room.currentTrick = [];
+          room.leadSuit = null;
+          broadcast(room);
+        }
       } else {
         advanceTurn(room);
         broadcast(room);
@@ -421,11 +427,19 @@ io.on('connection', (socket) => {
       winner.tricksWon += 1;
       room.trickHistory.push([...room.currentTrick]);
       room.lastTrick = [...room.currentTrick]; // preserve for round_end display
-      room.currentTrick = [];
-      room.leadSuit = null;
       room.currentTurn = winnerId;
-      broadcast(room);
-      if (checkHandComplete(room)) resolveHand(room);
+
+      if (checkHandComplete(room)) {
+        // Don't clear or broadcast yet — resolveHand will broadcast with
+        // status='round_end' and lastTrick so the last card stays visible
+        room.currentTrick = [];
+        room.leadSuit = null;
+        resolveHand(room);
+      } else {
+        room.currentTrick = [];
+        room.leadSuit = null;
+        broadcast(room);
+      }
     } else {
       advanceTurn(room);
       broadcast(room);
