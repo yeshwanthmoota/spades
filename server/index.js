@@ -39,7 +39,8 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 
 /** Strip internal fields (credentials, timers) and opponent hands from the view */
 function roomView(room, requestingSocketId) {
-  const { credentials, botTimers, ...roomData } = room; // never send passwords to clients
+  // roundEndTimer is a Node.js Timeout object — not JSON-serialisable, must exclude
+  const { credentials, botTimers, roundEndTimer, ...roomData } = room;
   return {
     ...roomData,
     players: room.players.map(p => ({
@@ -159,16 +160,19 @@ function resolveHand(room) {
   }
 
   if (!gameOver) {
-    // ── 10-second pause so everyone can see the last trick and scores ─────────
+    // ── 10-second pause so everyone can see the last trick ───────────────────
+    // currentTrick still has all N cards at this point — broadcast FIRST so
+    // every client sees the complete trick, THEN clear the table in the timeout.
     room.status = 'round_end';
-    broadcast(room); // clients see lastTrick + updated scores + round_end status
+    broadcast(room); // all N cards still in currentTrick → visible on every client
 
     room.roundEndTimer = setTimeout(() => {
       room.roundEndTimer = null;
+      if (!require('./roomManager').rooms[room.code]) return; // room deleted
 
-      // Room may have been deleted while waiting
-      if (!require('./roomManager').rooms[room.code]) return;
-
+      // Now clear the table and start the next round
+      room.currentTrick = [];
+      room.leadSuit = null;
       room.dealerIndex = nextPlayerIndex(room, room.dealerIndex);
       room.roundNumber += 1;
       let hands;
@@ -181,7 +185,7 @@ function resolveHand(room) {
       room.spadesBroken = false;
       room.lastTrick = [];
       startBiddingPhase(room);
-    }, 10000); // 10 seconds
+    }, 10000);
   } else {
     broadcast(room);
   }
@@ -242,8 +246,6 @@ function scheduleBot(room) {
         room.currentTurn = winnerId;
 
         if (checkHandComplete(room)) {
-          room.currentTrick = [];
-          room.leadSuit = null;
           resolveHand(room);
         } else {
           room.currentTrick = [];
@@ -430,10 +432,8 @@ io.on('connection', (socket) => {
       room.currentTurn = winnerId;
 
       if (checkHandComplete(room)) {
-        // Don't clear or broadcast yet — resolveHand will broadcast with
-        // status='round_end' and lastTrick so the last card stays visible
-        room.currentTrick = [];
-        room.leadSuit = null;
+        // Leave currentTrick populated — resolveHand broadcasts with all cards
+        // still visible. The timeout inside resolveHand clears the table.
         resolveHand(room);
       } else {
         room.currentTrick = [];

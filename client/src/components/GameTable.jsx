@@ -282,10 +282,10 @@ export default function GameTable({
             </div>
           )}
 
-          {/* Trick area — show lastTrick during round_end so cards stay visible */}
+          {/* Trick area — currentTrick stays populated during round_end */}
           <div className="w-64 h-44">
             <TrickArea
-              currentTrick={isRoundEnd ? (gameState.lastTrick ?? []) : currentTrick}
+              currentTrick={currentTrick}
               players={players}
               spadesBroken={spadesBroken}
             />
