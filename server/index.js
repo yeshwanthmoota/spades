@@ -108,6 +108,7 @@ function wipeCredentials(room) {
 }
 
 function resolveHand(room) {
+  console.log(`[DIAG] resolveHand entered. currentTrick length=${room.currentTrick.length}:`, JSON.stringify(room.currentTrick.map(e => `${e.card.rank}${e.card.suit}`)));
   const isGully = room.gameMode === 'gully';
 
   // Score this round
@@ -160,11 +161,9 @@ function resolveHand(room) {
   }
 
   if (!gameOver) {
-    // ── 10-second pause so everyone can see the last trick ───────────────────
-    // currentTrick still has all N cards at this point — broadcast FIRST so
-    // every client sees the complete trick, THEN clear the table in the timeout.
     room.status = 'round_end';
-    broadcast(room); // all N cards still in currentTrick → visible on every client
+    console.log(`[DIAG] About to broadcast round_end. currentTrick length=${room.currentTrick.length}:`, JSON.stringify(room.currentTrick.map(e => `${e.card.rank}${e.card.suit}`)));
+    broadcast(room);
 
     room.roundEndTimer = setTimeout(() => {
       room.roundEndTimer = null;
@@ -431,13 +430,16 @@ io.on('connection', (socket) => {
       room.lastTrick = [...room.currentTrick]; // preserve for round_end display
       room.currentTurn = winnerId;
 
+      console.log(`[DIAG] Trick complete. currentTrick has ${room.currentTrick.length} cards:`, JSON.stringify(room.currentTrick.map(e => `${e.card.rank}${e.card.suit}`)));
+      console.log(`[DIAG] checkHandComplete=${checkHandComplete(room)}`);
+
       if (checkHandComplete(room)) {
-        // Leave currentTrick populated — resolveHand broadcasts with all cards
-        // still visible. The timeout inside resolveHand clears the table.
+        console.log(`[DIAG] Hand complete — calling resolveHand. currentTrick length=${room.currentTrick.length}`);
         resolveHand(room);
       } else {
         room.currentTrick = [];
         room.leadSuit = null;
+        console.log(`[DIAG] Mid-round trick done — broadcasting. currentTrick cleared.`);
         broadcast(room);
       }
     } else {
