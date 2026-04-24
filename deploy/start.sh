@@ -71,6 +71,10 @@ if ! command -v nginx &>/dev/null; then
   fail "Nginx not found. Run deploy/setup.sh first."
 fi
 
+# Ensure nginx (www-data) can traverse the home directory.
+# /home/ubuntu is 750 by default on a fresh EC2 — this causes HTTP 500s.
+sudo chmod o+x /home/ubuntu
+
 if sudo systemctl is-active --quiet nginx; then
   ok "Nginx already running"
 else

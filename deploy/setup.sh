@@ -73,6 +73,9 @@ ok "React build complete → server/public/"
 
 # ── 7. Configure Nginx ───────────────────────────────────────────────────────
 step 7 "Configuring Nginx"
+# Allow nginx (www-data) to traverse the ubuntu home directory.
+# /home/ubuntu is 750 by default — nginx can't enter it without +x for others.
+sudo chmod o+x /home/ubuntu
 # Nginx serves directly from server/public — no copy needed
 sudo cp "$APP_DIR/deploy/nginx.conf" /etc/nginx/sites-available/spades
 sudo ln -sf /etc/nginx/sites-available/spades /etc/nginx/sites-enabled/spades
